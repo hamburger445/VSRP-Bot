@@ -64,17 +64,47 @@ async def consume_pending_unban_roles(member: discord.Member) -> bool:
 
 
 async def apply_unban_roles(member: discord.Member, *, reason: str = "Ban lifted") -> list[discord.Role]:
-    restore: list[discord.Role] = []
+    guild = member.guild
+    me = guild.me
+    if not me:
+        raise discord.ClientException("Bot member not available for role assignment.")
+
+    banned = _banned_role(guild)
+    if banned and banned in member.roles:
+        try:
+            await member.remove_roles(banned, reason=reason)
+        except discord.HTTPException as exc:
+            log.warning("Could not remove banned role from %s: %s", member.id, exc)
+            raise
+
+    assigned: list[discord.Role] = []
     for role_id in unban_restore_role_ids():
-        role = member.guild.get_role(role_id)
-        if role and role < member.guild.me.top_role:
-            restore.append(role)
-    try:
-        await member.edit(roles=restore, reason=reason)
-    except discord.HTTPException as exc:
-        log.warning("Could not apply unban roles for %s: %s", member.id, exc)
-        raise
-    return restore
+        role = guild.get_role(role_id)
+        if not role:
+            log.warning("Unban restore role %s not found in guild %s", role_id, guild.id)
+            continue
+        if role >= me.top_role:
+            log.warning(
+                "Cannot assign %s (%s): move the bot role above it in Server Settings → Roles",
+                role.name,
+                role_id,
+            )
+            continue
+        if role in member.roles:
+            assigned.append(role)
+            continue
+        try:
+            await member.add_roles(role, reason=reason)
+            assigned.append(role)
+        except discord.HTTPException as exc:
+            log.warning("Failed to add role %s to %s: %s", role_id, member.id, exc)
+
+    if not assigned and unban_restore_role_ids():
+        raise discord.Forbidden(
+            None,
+            "No unban roles could be assigned. Move the bot role above the member, banned, and unban roles.",
+        )
+    return assigned
 
 
 def softban_notify_channel_id() -> int:
@@ -175,44 +205,32 @@ async def remove_soft_ban(
     *,
     reason: str = "Ban lifted",
 ) -> tuple[bool, str]:
-    db = await get_db()
-    row = await db.execute_fetchone(
-        "SELECT saved_roles_json FROM soft_bans WHERE guild_id = ? AND user_id = ? AND active = 1",
-        (guild.id, user_id),
-    )
-    if not row:
-        return False, "That user is not soft-banned."
-
+    member = guild.get_member(user_id)
     banned = _banned_role(guild)
     if not banned:
         return False, "Banned role not configured."
 
-    member = guild.get_member(user_id)
+    soft_active = await is_soft_banned(guild.id, user_id)
+    has_banned_role = member is not None and banned in member.roles
+    if not soft_active and not has_banned_role:
+        return False, "That user is not soft-banned."
+
+    # Clear DB before changing roles so on_member_update does not re-strip them.
+    await deactivate_soft_ban_record(guild.id, user_id)
+
     if not member:
-        await db.execute(
-            "UPDATE soft_bans SET active = 0, lifted_at = NOW() WHERE guild_id = ? AND user_id = ?",
-            (guild.id, user_id),
-        )
-        await db.commit()
         await mark_pending_unban_roles(guild.id, user_id)
         return True, f"Soft-ban cleared for `{user_id}` (not in server; roles will restore when they rejoin)."
 
     try:
-        await apply_unban_roles(member, reason=reason)
+        assigned = await apply_unban_roles(member, reason=reason)
     except discord.Forbidden:
-        return False, "Cannot restore roles (hierarchy or permissions)."
+        return False, "Cannot restore roles — move the bot role above the member/banned/unban roles."
     except discord.HTTPException as exc:
         return False, f"Failed to remove soft ban: {exc}"
 
-    await db.execute(
-        "UPDATE soft_bans SET active = 0, lifted_at = NOW() WHERE guild_id = ? AND user_id = ?",
-        (guild.id, user_id),
-    )
-    await db.commit()
-    role_names = ", ".join(
-        role.name for role_id in unban_restore_role_ids() if (role := guild.get_role(role_id))
-    )
-    return True, f"Removed soft-ban from {member.mention} and assigned unban roles ({role_names or 'configured set'})."
+    role_names = ", ".join(r.name for r in assigned) or "none (check hierarchy)"
+    return True, f"Removed soft-ban from {member.mention} and assigned: {role_names}."
 
 
 async def full_unban(
@@ -232,8 +250,9 @@ async def full_unban(
         member = guild.get_member(user_id)
         banned = _banned_role(guild)
         if member and banned and banned in member.roles:
-            ok, msg = await remove_soft_ban(guild, user_id, reason=reason)
-            return ok, msg
+            return await remove_soft_ban(guild, user_id, reason=reason)
+        if await is_soft_banned(guild.id, user_id):
+            return await remove_soft_ban(guild, user_id, reason=reason)
         return False, "That user is not soft-banned or Discord-banned."
 
     try:
@@ -241,13 +260,15 @@ async def full_unban(
     except discord.HTTPException as exc:
         return False, f"Failed to Discord-unban: {exc}"
 
+    await deactivate_soft_ban_record(guild.id, user_id)
     member = guild.get_member(user_id)
     if member:
         try:
-            await apply_unban_roles(member, reason=reason)
+            assigned = await apply_unban_roles(member, reason=reason)
         except discord.HTTPException as exc:
             return False, f"Unbanned from Discord but could not assign roles: {exc}"
-        return True, f"Hard-unbanned {member.mention} and assigned unban roles."
+        names = ", ".join(r.name for r in assigned) or "none (check hierarchy)"
+        return True, f"Hard-unbanned {member.mention} and assigned: {names}."
 
     await mark_pending_unban_roles(guild.id, user_id)
     return True, f"Hard-unbanned `{ban_entry.user}`. Unban roles will apply when they rejoin."
