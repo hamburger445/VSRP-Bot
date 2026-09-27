@@ -43,15 +43,19 @@ def _load_example_config() -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _skip_merge_key(key: Any) -> bool:
+    return isinstance(key, str) and key.startswith("_")
+
+
 def _deep_merge_missing(
-    base: dict[str, Any],
-    defaults: dict[str, Any],
-) -> tuple[dict[str, Any], bool]:
+    base: dict[Any, Any],
+    defaults: dict[Any, Any],
+) -> tuple[dict[Any, Any], bool]:
     """Fill missing keys from defaults. Existing values in base are never overwritten."""
     merged = dict(base)
     changed = False
     for key, default_value in defaults.items():
-        if key.startswith("_"):
+        if _skip_merge_key(key):
             continue
         if key not in merged:
             merged[key] = default_value
