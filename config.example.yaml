@@ -112,6 +112,10 @@ moderation:
   banned_role_id: 1553820949357535363
   banned_channel_id: 1250622854110773291
   softban_notify_channel_id: 1553820901781536881
+  unban_restore_role_ids:
+    - 1244718289616244789
+    - 1514256466398154752
+    - 1250612203850170390
 
 vehicles:
   max_per_member: 5

@@ -6,7 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils.core import format_datetime, load_config
+from utils.core import defer, format_datetime, load_config
 from utils.database import get_db
 from utils.helpers import log_action
 from utils.soft_ban import (
@@ -16,6 +16,7 @@ from utils.soft_ban import (
     enforce_soft_ban_on_join,
     enforce_soft_ban_roles,
     is_soft_banned,
+    full_unban,
     remove_soft_ban,
     softban_notify_channel_id,
 )
@@ -197,16 +198,21 @@ async def _dm_case_notice(
     title: str,
     fields: dict[str, str],
     appealable: bool,
+    appeal_button: bool | None = None,
+    appeal_footer: str | None = None,
 ) -> None:
     lines = [f"**Case #{case_id}**"]
     lines.extend(f"**{k}:** {v}" for k, v in fields.items())
     description = "\n".join(lines)
-    if appealable:
+    show_button = appealable if appeal_button is None else appeal_button
+    if show_button:
         description += "\n\nYou may submit an appeal using the button below."
+    elif appeal_footer:
+        description += f"\n\n{appeal_footer}"
 
     embed = discord.Embed(title=title, description=description, color=0xE74C3C)
     view = None
-    if appealable:
+    if show_button:
         view = AppealOpenView(case_id)
         bot.add_view(view)
     try:
@@ -477,7 +483,13 @@ async def _reverse_punishment(guild: discord.Guild, case: dict) -> None:
     user_id = case["user_id"]
     try:
         if _case_is_hard_ban(case):
-            await guild.unban(discord.Object(id=user_id), reason=f"Appeal accepted case #{case['id']}")
+            ok, _ = await full_unban(
+                guild,
+                user_id,
+                reason=f"Appeal accepted case #{case['id']}",
+            )
+            if not ok:
+                await guild.unban(discord.Object(id=user_id), reason=f"Appeal accepted case #{case['id']}")
         elif action in ("softban", "ban", "modban"):
             await remove_soft_ban(
                 guild,
@@ -581,6 +593,7 @@ async def _execute_hardban(
             "Appealable": "No",
         },
         appealable=False,
+        appeal_button=False,
     )
     ok, msg = await _discord_hardban_member(target, case_id=case_id, reason=reason)
     if not ok:
@@ -652,9 +665,14 @@ async def _execute_softban(
             "Reason": reason[:500],
             "Evidence": proof[:500],
             "Moderator": str(moderator),
-            "Appealable": "Yes — use the appeal button or open a ticket with your case number.",
+            "Appealable": "Yes — open a support ticket and include your case number.",
         },
         appealable=True,
+        appeal_button=False,
+        appeal_footer=(
+            "To appeal, open a ticket in the appeals channel and include **Case #"
+            f"{case_id}**. Do not use the in-DM appeal button for softbans."
+        ),
     )
     return case_id, f"{apply_msg} Case **#{case_id}**."
 
@@ -676,6 +694,7 @@ class StrikeModal(discord.ui.Modal, title="Issue Strike"):
         if self.strike_number.value.strip() not in ("1", "2", "3"):
             await interaction.response.send_message("Strike number must be 1, 2, or 3.", ephemeral=True)
             return
+        await defer(interaction)
         strike_num = int(self.strike_number.value.strip())
         reason = f"Strike {strike_num} | {self.roblox_username.value.strip()}"
         case_id = await _create_case(
@@ -701,7 +720,7 @@ class StrikeModal(discord.ui.Modal, title="Issue Strike"):
             appealable=True,
         )
         await log_action(self.cog.bot, "mod_strike", self.moderator.id, target_id=self.target.id, details={"case_id": case_id}, channel_key="moderation")
-        await interaction.response.send_message(f"Strike **{strike_num}** issued. Case **#{case_id}**.", ephemeral=True)
+        await interaction.followup.send(f"Strike **{strike_num}** issued. Case **#{case_id}**.", ephemeral=True)
 
 
 class SoftbanModal(discord.ui.Modal, title="Issue Softban"):
@@ -718,6 +737,7 @@ class SoftbanModal(discord.ui.Modal, title="Issue Softban"):
         self.add_item(self.proof)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await defer(interaction)
         roblox = self.roblox_username.value.strip()
         reason = f"{self.reason.value.strip()} | Roblox: {roblox}"
         proof = self.proof.value.strip()
@@ -739,7 +759,7 @@ class SoftbanModal(discord.ui.Modal, title="Issue Softban"):
                 details={"case_id": case_id},
                 channel_key="moderation",
             )
-        await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.followup.send(msg, ephemeral=True)
 
 
 class HardbanModal(discord.ui.Modal, title="Issue Hardban"):
@@ -756,6 +776,7 @@ class HardbanModal(discord.ui.Modal, title="Issue Hardban"):
         self.add_item(self.proof)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await defer(interaction)
         roblox = self.roblox_username.value.strip()
         reason = f"{self.reason.value.strip()} | Roblox: {roblox}"
         proof = self.proof.value.strip()
@@ -777,7 +798,14 @@ class HardbanModal(discord.ui.Modal, title="Issue Hardban"):
                 details={"case_id": case_id},
                 channel_key="moderation",
             )
-        await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.followup.send(msg, ephemeral=True)
+
+
+def _parse_unban_target(raw: str) -> int | None:
+    try:
+        return int(raw.strip().strip("<@!>"))
+    except ValueError:
+        return None
 
 
 class Moderation(commands.Cog):
@@ -1069,42 +1097,73 @@ class Moderation(commands.Cog):
             return
         await ctx.send(f"Unmuted {member.mention}. Case **#{case_id}**.")
 
+    async def _complete_unban(
+        self,
+        guild: discord.Guild,
+        user_id: int,
+        reason: str,
+        *,
+        moderator_id: int,
+    ) -> tuple[bool, str, int | None]:
+        ok, msg = await full_unban(guild, user_id, reason=reason)
+        if not ok:
+            return False, msg, None
+        case_id = await _create_case(
+            guild,
+            user_id,
+            "unban",
+            reason[:2000],
+            moderator_id,
+            appealable=False,
+        )
+        return True, msg, case_id
+
     @commands.command(name="unban")
     async def unban(self, ctx: commands.Context, target: str, *, reason: str = "Ban lifted"):
         if not can_ban(ctx.author):
             await ctx.send("You don't have permission to unban members.")
             return
-        raw = target.strip().strip("<@!>")
-        try:
-            user_id = int(raw)
-        except ValueError:
+        user_id = _parse_unban_target(target)
+        if user_id is None:
             await ctx.send("Use a user ID or mention (e.g. `-unban 123456789` or `-unban @user`).")
             return
+        ok, msg, case_id = await self._complete_unban(
+            ctx.guild, user_id, reason, moderator_id=ctx.author.id,
+        )
+        if not ok:
+            await ctx.send(msg)
+            return
+        await self._log_mod(ctx, "mod_unban", user_id, {"case_id": case_id, "reason": reason})
+        await ctx.send(f"{msg} Case **#{case_id}**.")
 
-        if await is_soft_banned(ctx.guild.id, user_id):
-            ok, msg = await remove_soft_ban(ctx.guild, user_id, reason=reason)
-            if not ok:
-                await ctx.send(msg)
-                return
-            case_id = await self._record_action(ctx, user_id, "unban", reason, appealable=False)
-            await ctx.send(f"{msg} Case **#{case_id}**.")
+    @app_commands.command(name="unban", description="Remove a softban or Discord hardban and restore unban roles")
+    @app_commands.describe(user="The user to unban (by account)", reason="Why the ban was lifted")
+    async def unban_slash(self, interaction: discord.Interaction, user: discord.User, reason: str = "Ban lifted"):
+        if not can_ban(interaction.user):
+            await interaction.response.send_message("You don't have permission to unban members.", ephemeral=True)
             return
-
-        try:
-            ban_entry = await ctx.guild.fetch_ban(discord.Object(id=user_id))
-            await ctx.guild.unban(ban_entry.user, reason=reason)
-        except discord.NotFound:
-            member = ctx.guild.get_member(user_id)
-            if member:
-                await ctx.send("That member is in the server and is not soft-banned.")
-            else:
-                await ctx.send("That user is not banned (Discord or soft ban).")
+        if not interaction.guild:
+            await interaction.response.send_message("Run this in a server.", ephemeral=True)
             return
-        except discord.HTTPException:
-            await ctx.send("Failed to unban.")
+        await defer(interaction)
+        ok, msg, case_id = await self._complete_unban(
+            interaction.guild,
+            user.id,
+            reason,
+            moderator_id=interaction.user.id,
+        )
+        if not ok:
+            await interaction.followup.send(msg, ephemeral=True)
             return
-        case_id = await self._record_action(ctx, user_id, "unban", reason, appealable=False)
-        await ctx.send(f"Unbanned `{ban_entry.user}`. Case **#{case_id}**.")
+        await log_action(
+            self.bot,
+            "mod_unban",
+            interaction.user.id,
+            target_id=user.id,
+            details={"case_id": case_id, "reason": reason},
+            channel_key="moderation",
+        )
+        await interaction.followup.send(f"{msg} Case **#{case_id}**.", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
