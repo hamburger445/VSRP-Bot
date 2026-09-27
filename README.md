@@ -51,6 +51,10 @@ When `GITHUB_TOKEN` is set, permission changes from `/setup-permissions` and `-r
 
 **Never commit `.env` or tokens to GitHub.**
 
+## Container hosting (GitHub pull on start)
+
+See [STARTUP.md](STARTUP.md) for the panel startup command and env vars (`GITHUB_TOKEN`, `GITHUB_REPO`, etc.).
+
 ## Config Notes
 
 - `emojis: {}` — no emojis used unless you add them here
