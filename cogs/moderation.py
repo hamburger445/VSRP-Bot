@@ -11,10 +11,13 @@ from utils.database import get_db
 from utils.helpers import log_action
 from utils.soft_ban import (
     apply_soft_ban,
+    count_prior_softban_cases,
+    deactivate_soft_ban_record,
     enforce_soft_ban_on_join,
     enforce_soft_ban_roles,
     is_soft_banned,
     remove_soft_ban,
+    softban_notify_channel_id,
 )
 from utils.permissions import (
     PERMISSION_DEFINITIONS,
@@ -460,25 +463,200 @@ async def _review_appeal(interaction: discord.Interaction, appeal_id: int, *, ac
         pass
 
 
+def _case_is_hard_ban(case: dict) -> bool:
+    action = case["action_type"]
+    if action == "hardban":
+        return True
+    if action in ("modban", "ban") and not case.get("appealable"):
+        return True
+    return False
+
+
 async def _reverse_punishment(guild: discord.Guild, case: dict) -> None:
     action = case["action_type"]
     user_id = case["user_id"]
     try:
-        if action in ("ban", "modban"):
-            if await is_soft_banned(guild.id, user_id):
-                await remove_soft_ban(
-                    guild,
-                    user_id,
-                    reason=f"Appeal accepted case #{case['id']}",
-                )
-            else:
-                await guild.unban(discord.Object(id=user_id), reason=f"Appeal accepted case #{case['id']}")
+        if _case_is_hard_ban(case):
+            await guild.unban(discord.Object(id=user_id), reason=f"Appeal accepted case #{case['id']}")
+        elif action in ("softban", "ban", "modban"):
+            await remove_soft_ban(
+                guild,
+                user_id,
+                reason=f"Appeal accepted case #{case['id']}",
+            )
         elif action == "mute":
             member = guild.get_member(user_id)
             if member:
                 await member.timeout(None, reason=f"Appeal accepted case #{case['id']}")
     except discord.HTTPException:
         pass
+
+
+async def _post_softban_channel_notice(
+    guild: discord.Guild,
+    target: discord.Member,
+    *,
+    case_id: int,
+    moderator: discord.abc.User,
+    reason: str,
+    evidence: str,
+) -> None:
+    channel_id = softban_notify_channel_id()
+    if not channel_id:
+        return
+    channel = guild.get_channel(channel_id)
+    if not isinstance(channel, discord.TextChannel):
+        return
+    embed = discord.Embed(
+        title="You Have Been Softbanned",
+        description=(
+            "You have been softbanned from this server. You can open a ticket in the "
+            "appeals channel to submit an appeal. Use the case number below when appealing."
+        ),
+        color=0xE74C3C,
+    )
+    embed.add_field(name="Case Number", value=f"**#{case_id}**", inline=True)
+    embed.add_field(name="Moderator", value=f"{moderator.mention} (`{moderator.id}`)", inline=True)
+    embed.add_field(name="Reason", value=reason[:1024] or "No reason provided", inline=False)
+    embed.add_field(name="Evidence", value=evidence[:1024] or reason[:1024] or "See reason above.", inline=False)
+    embed.set_footer(text="Hard bans are not appealable. A second softban becomes an automatic hard ban.")
+    try:
+        await channel.send(content=target.mention, embed=embed)
+    except discord.HTTPException:
+        pass
+
+
+async def _discord_hardban_member(
+    member: discord.Member,
+    *,
+    case_id: int,
+    reason: str,
+) -> tuple[bool, str]:
+    await deactivate_soft_ban_record(member.guild.id, member.id)
+    try:
+        await member.ban(reason=f"Case #{case_id}: {reason}", delete_message_days=0)
+    except discord.Forbidden:
+        return False, "I cannot ban this member (missing permissions or role hierarchy)."
+    except discord.HTTPException as exc:
+        return False, f"Discord hard ban failed: {exc}"
+    return True, f"Hard-banned {member.mention} from the server."
+
+
+async def _execute_hardban(
+    bot: commands.Bot,
+    guild: discord.Guild,
+    target: discord.Member,
+    moderator: discord.Member,
+    reason: str,
+    *,
+    evidence: str | None = None,
+    extra: dict | None = None,
+    auto_escalation: bool = False,
+) -> tuple[int | None, str]:
+    proof = (evidence or reason)[:1500]
+    case_extra = dict(extra or {})
+    case_extra.setdefault("proof", proof[:500])
+    if auto_escalation:
+        case_extra["auto_hardban"] = True
+
+    case_id = await _create_case(
+        guild,
+        target.id,
+        "hardban",
+        reason[:2000],
+        moderator.id,
+        appealable=False,
+        extra=case_extra,
+    )
+    await _dm_case_notice(
+        bot,
+        guild,
+        target,
+        case_id=case_id,
+        title="You Have Been Permanently Banned",
+        fields={
+            "Reason": reason[:500],
+            "Evidence": proof[:500],
+            "Moderator": str(moderator),
+            "Appealable": "No",
+        },
+        appealable=False,
+    )
+    ok, msg = await _discord_hardban_member(target, case_id=case_id, reason=reason)
+    if not ok:
+        return case_id, f"Case #{case_id} created but hard ban failed: {msg}"
+    suffix = " (automatic — second softban)" if auto_escalation else ""
+    return case_id, f"{msg}{suffix} Case **#{case_id}**."
+
+
+async def _execute_softban(
+    bot: commands.Bot,
+    guild: discord.Guild,
+    target: discord.Member,
+    moderator: discord.Member,
+    reason: str,
+    *,
+    evidence: str | None = None,
+    extra: dict | None = None,
+) -> tuple[int | None, str]:
+    proof = (evidence or reason)[:1500]
+    prior = await count_prior_softban_cases(guild.id, target.id)
+    if prior >= 1:
+        esc_reason = f"{reason} | Automatic hardban (second softban)"
+        return await _execute_hardban(
+            bot,
+            guild,
+            target,
+            moderator,
+            esc_reason,
+            evidence=proof,
+            extra=extra,
+            auto_escalation=True,
+        )
+
+    case_extra = dict(extra or {})
+    case_extra.setdefault("proof", proof[:500])
+    case_id = await _create_case(
+        guild,
+        target.id,
+        "softban",
+        reason[:2000],
+        moderator.id,
+        appealable=True,
+        extra=case_extra,
+    )
+    ok, apply_msg = await apply_soft_ban(
+        target,
+        moderator_id=moderator.id,
+        case_id=case_id,
+        reason=f"Case #{case_id}: {reason}",
+    )
+    if not ok:
+        return case_id, f"Case #{case_id} created but soft ban failed: {apply_msg}"
+
+    await _post_softban_channel_notice(
+        guild,
+        target,
+        case_id=case_id,
+        moderator=moderator,
+        reason=reason,
+        evidence=proof,
+    )
+    await _dm_case_notice(
+        bot,
+        guild,
+        target,
+        case_id=case_id,
+        title="You Have Been Softbanned",
+        fields={
+            "Reason": reason[:500],
+            "Evidence": proof[:500],
+            "Moderator": str(moderator),
+            "Appealable": "Yes — use the appeal button or open a ticket with your case number.",
+        },
+        appealable=True,
+    )
+    return case_id, f"{apply_msg} Case **#{case_id}**."
 
 
 class StrikeModal(discord.ui.Modal, title="Issue Strike"):
@@ -526,61 +704,80 @@ class StrikeModal(discord.ui.Modal, title="Issue Strike"):
         await interaction.response.send_message(f"Strike **{strike_num}** issued. Case **#{case_id}**.", ephemeral=True)
 
 
-class BanModal(discord.ui.Modal, title="Issue Moderation Ban"):
+class SoftbanModal(discord.ui.Modal, title="Issue Softban"):
     def __init__(self, cog: "Moderation", target: discord.Member, moderator: discord.Member):
         super().__init__()
         self.cog = cog
         self.target = target
         self.moderator = moderator
         self.roblox_username = discord.ui.TextInput(label="Roblox Username", required=True, max_length=100)
-        self.ban_type = discord.ui.TextInput(label="Ban Type", placeholder="appealable or unappealable", required=True, max_length=20)
-        self.proof = discord.ui.TextInput(label="Proof", style=discord.TextStyle.paragraph, required=True, max_length=1500)
+        self.reason = discord.ui.TextInput(label="Reason", style=discord.TextStyle.paragraph, required=True, max_length=1000)
+        self.proof = discord.ui.TextInput(label="Evidence / Proof", style=discord.TextStyle.paragraph, required=True, max_length=1500)
         self.add_item(self.roblox_username)
-        self.add_item(self.ban_type)
+        self.add_item(self.reason)
         self.add_item(self.proof)
 
     async def on_submit(self, interaction: discord.Interaction):
-        ban_type = self.ban_type.value.strip().lower()
-        if ban_type not in ("appealable", "unappealable"):
-            await interaction.response.send_message("Ban type must be `appealable` or `unappealable`.", ephemeral=True)
-            return
-        appealable = ban_type == "appealable"
-        reason = f"{ban_type.title()} ban | {self.roblox_username.value.strip()}"
-        case_id = await _create_case(
-            interaction.guild,
-            self.target.id,
-            "modban",
-            reason,
-            self.moderator.id,
-            appealable=appealable,
-            extra={"roblox_username": self.roblox_username.value.strip(), "ban_type": ban_type, "proof": self.proof.value.strip()[:500]},
-        )
-        await _dm_case_notice(
+        roblox = self.roblox_username.value.strip()
+        reason = f"{self.reason.value.strip()} | Roblox: {roblox}"
+        proof = self.proof.value.strip()
+        case_id, msg = await _execute_softban(
             self.cog.bot,
             interaction.guild,
             self.target,
-            case_id=case_id,
-            title="You Have Been Banned",
-            fields={
-                "Roblox Username": self.roblox_username.value.strip(),
-                "Ban Type": ban_type.title(),
-                "Proof": self.proof.value.strip()[:500],
-                "Moderator": str(self.moderator),
-            },
-            appealable=appealable,
+            self.moderator,
+            reason,
+            evidence=proof,
+            extra={"roblox_username": roblox, "proof": proof[:500]},
         )
-        soft_ok = False
-        soft_msg = ""
-        if _hierarchy_ok(self.moderator, self.target)[0]:
-            soft_ok, soft_msg = await apply_soft_ban(
-                self.target,
-                moderator_id=self.moderator.id,
-                case_id=case_id,
-                reason=f"Case #{case_id}: {reason}",
+        if case_id:
+            await log_action(
+                self.cog.bot,
+                "mod_softban",
+                self.moderator.id,
+                target_id=self.target.id,
+                details={"case_id": case_id},
+                channel_key="moderation",
             )
-        await log_action(self.cog.bot, "mod_ban_record", self.moderator.id, target_id=self.target.id, details={"case_id": case_id}, channel_key="moderation")
-        extra = f" {soft_msg}" if soft_ok else (" Soft ban failed — check banned role and hierarchy." if _hierarchy_ok(self.moderator, self.target)[0] else "")
-        await interaction.response.send_message(f"Ban recorded. Case **#{case_id}**.{extra}", ephemeral=True)
+        await interaction.response.send_message(msg, ephemeral=True)
+
+
+class HardbanModal(discord.ui.Modal, title="Issue Hardban"):
+    def __init__(self, cog: "Moderation", target: discord.Member, moderator: discord.Member):
+        super().__init__()
+        self.cog = cog
+        self.target = target
+        self.moderator = moderator
+        self.roblox_username = discord.ui.TextInput(label="Roblox Username", required=True, max_length=100)
+        self.reason = discord.ui.TextInput(label="Reason", style=discord.TextStyle.paragraph, required=True, max_length=1000)
+        self.proof = discord.ui.TextInput(label="Evidence / Proof", style=discord.TextStyle.paragraph, required=True, max_length=1500)
+        self.add_item(self.roblox_username)
+        self.add_item(self.reason)
+        self.add_item(self.proof)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        roblox = self.roblox_username.value.strip()
+        reason = f"{self.reason.value.strip()} | Roblox: {roblox}"
+        proof = self.proof.value.strip()
+        case_id, msg = await _execute_hardban(
+            self.cog.bot,
+            interaction.guild,
+            self.target,
+            self.moderator,
+            reason,
+            evidence=proof,
+            extra={"roblox_username": roblox, "proof": proof[:500]},
+        )
+        if case_id:
+            await log_action(
+                self.cog.bot,
+                "mod_hardban",
+                self.moderator.id,
+                target_id=self.target.id,
+                details={"case_id": case_id},
+                channel_key="moderation",
+            )
+        await interaction.response.send_message(msg, ephemeral=True)
 
 
 class Moderation(commands.Cog):
@@ -653,16 +850,35 @@ class Moderation(commands.Cog):
             return
         await interaction.response.send_modal(StrikeModal(self, member, interaction.user))
 
-    @app_commands.command(name="modban", description="Record a ban and optionally Discord ban (admin)")
-    async def modban_slash(self, interaction: discord.Interaction, member: discord.Member):
+    @app_commands.command(name="softban", description="Softban a member (banned role, appealable)")
+    async def softban_slash(self, interaction: discord.Interaction, member: discord.Member):
         if not can_ban(interaction.user):
-            await interaction.response.send_message("You don't have permission to ban members.", ephemeral=True)
+            await interaction.response.send_message("You don't have permission to softban members.", ephemeral=True)
+            return
+        if not isinstance(interaction.user, discord.Member):
             return
         ok, msg = _hierarchy_ok(interaction.user, member)
         if not ok:
             await interaction.response.send_message(msg, ephemeral=True)
             return
-        await interaction.response.send_modal(BanModal(self, member, interaction.user))
+        await interaction.response.send_modal(SoftbanModal(self, member, interaction.user))
+
+    @app_commands.command(name="hardban", description="Permanently ban a member from the server (not appealable)")
+    async def hardban_slash(self, interaction: discord.Interaction, member: discord.Member):
+        if not can_ban(interaction.user):
+            await interaction.response.send_message("You don't have permission to hardban members.", ephemeral=True)
+            return
+        if not isinstance(interaction.user, discord.Member):
+            return
+        ok, msg = _hierarchy_ok(interaction.user, member)
+        if not ok:
+            await interaction.response.send_message(msg, ephemeral=True)
+            return
+        await interaction.response.send_modal(HardbanModal(self, member, interaction.user))
+
+    @app_commands.command(name="modban", description="Softban a member (same as /softban)")
+    async def modban_slash(self, interaction: discord.Interaction, member: discord.Member):
+        await self.softban_slash(interaction, member)
 
     @commands.command(name="modlogs")
     async def modlogs(self, ctx: commands.Context, user: discord.Member):
@@ -733,30 +949,46 @@ class Moderation(commands.Cog):
         await db.commit()
         await ctx.send(f"Case #{case_id} reason updated.")
 
-    @commands.command(name="ban")
-    async def ban(self, ctx: commands.Context, member: discord.Member, *, reason: str = "No reason provided"):
+    @commands.command(name="softban")
+    async def softban(self, ctx: commands.Context, member: discord.Member, *, reason: str = "No reason provided"):
         if not can_ban(ctx.author):
-            await ctx.send("You don't have permission to ban members.")
+            await ctx.send("You don't have permission to softban members.")
+            return
+        if not isinstance(ctx.author, discord.Member):
             return
         ok, msg = _hierarchy_ok(ctx.author, member)
         if not ok:
             await ctx.send(msg)
             return
-        case_id = await self._record_action(
-            ctx, member, "ban", reason,
-            dm_title="You have been banned",
-            dm_fields={"Server": ctx.guild.name, "Reason": reason, "Moderator": str(ctx.author)},
+        case_id, result = await _execute_softban(
+            self.bot, ctx.guild, member, ctx.author, reason, evidence=reason,
         )
-        ok, msg = await apply_soft_ban(
-            member,
-            moderator_id=ctx.author.id,
-            case_id=case_id,
-            reason=f"Case #{case_id}: {reason}",
-        )
-        if not ok:
-            await ctx.send(f"Case #{case_id} created but soft ban failed: {msg}")
+        if case_id:
+            await self._log_mod(ctx, "mod_softban", member.id, {"case_id": case_id, "reason": reason})
+        await ctx.send(result)
+
+    @commands.command(name="hardban")
+    async def hardban(self, ctx: commands.Context, member: discord.Member, *, reason: str = "No reason provided"):
+        if not can_ban(ctx.author):
+            await ctx.send("You don't have permission to hardban members.")
             return
-        await ctx.send(f"{msg} Case **#{case_id}**.")
+        if not isinstance(ctx.author, discord.Member):
+            return
+        ok, msg = _hierarchy_ok(ctx.author, member)
+        if not ok:
+            await ctx.send(msg)
+            return
+        case_id, result = await _execute_hardban(
+            self.bot, ctx.guild, member, ctx.author, reason, evidence=reason,
+        )
+        if case_id:
+            await self._log_mod(ctx, "mod_hardban", member.id, {"case_id": case_id, "reason": reason})
+        await ctx.send(result)
+
+    @commands.command(name="ban")
+    async def ban(self, ctx: commands.Context, member: discord.Member, *, reason: str = "No reason provided"):
+        await ctx.send(f"`{_PREFIX()}ban` is now `{_PREFIX()}softban`. Running softban…")
+        await self.softban(ctx, member, reason=reason)
 
     @commands.command(name="kick")
     async def kick(self, ctx: commands.Context, member: discord.Member, *, reason: str = "No reason provided"):

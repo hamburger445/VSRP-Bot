@@ -14,6 +14,9 @@ log = logging.getLogger("vsrp_bot.soft_ban")
 
 DEFAULT_BANNED_ROLE_ID = 1553820949357535363
 DEFAULT_BANNED_CHANNEL_ID = 1250622854110773291
+DEFAULT_SOFTBAN_NOTIFY_CHANNEL_ID = 1553820901781536881
+
+SOFTBAN_CASE_ACTIONS = ("softban", "ban", "modban")
 
 
 def banned_role_id() -> int:
@@ -25,6 +28,43 @@ def banned_channel_id() -> int:
     mod = load_config().get("moderation", {})
     raw = mod.get("banned_channel_id") or load_config().get("channels", {}).get("tickets") or DEFAULT_BANNED_CHANNEL_ID
     return int(raw)
+
+
+def softban_notify_channel_id() -> int:
+    raw = load_config().get("moderation", {}).get("softban_notify_channel_id") or DEFAULT_SOFTBAN_NOTIFY_CHANNEL_ID
+    return int(raw)
+
+
+def banned_visible_channel_ids() -> list[int]:
+    seen: set[int] = set()
+    ordered: list[int] = []
+    for channel_id in (softban_notify_channel_id(), banned_channel_id()):
+        if channel_id and channel_id not in seen:
+            seen.add(channel_id)
+            ordered.append(channel_id)
+    return ordered
+
+
+async def count_prior_softban_cases(guild_id: int, user_id: int) -> int:
+    db = await get_db()
+    row = await db.execute_fetchone(
+        f"""
+        SELECT COUNT(*) AS c FROM mod_cases
+        WHERE guild_id = ? AND user_id = ?
+          AND action_type IN ({",".join("?" * len(SOFTBAN_CASE_ACTIONS))})
+        """,
+        (guild_id, user_id, *SOFTBAN_CASE_ACTIONS),
+    )
+    return int(row["c"]) if row else 0
+
+
+async def deactivate_soft_ban_record(guild_id: int, user_id: int) -> None:
+    db = await get_db()
+    await db.execute(
+        "UPDATE soft_bans SET active = 0, lifted_at = NOW() WHERE guild_id = ? AND user_id = ? AND active = 1",
+        (guild_id, user_id),
+    )
+    await db.commit()
 
 
 def _banned_role(guild: discord.Guild) -> discord.Role | None:
@@ -176,19 +216,21 @@ async def enforce_soft_ban_roles(member: discord.Member) -> bool:
         return False
 
 
-async def setup_banned_role_permissions(guild: discord.Guild) -> tuple[int, int]:
-    """Channel overwrites: banned role sees only the configured channel."""
+async def setup_banned_role_permissions(guild: discord.Guild) -> tuple[int, list[int]]:
+    """Channel overwrites: banned role sees only configured appeal / notice channels."""
     role = _banned_role(guild)
-    allow_channel_id = banned_channel_id()
+    allow_ids = banned_visible_channel_ids()
     if not role:
         raise ValueError("Banned role not found.")
-    if not allow_channel_id:
-        raise ValueError("banned_channel_id not configured.")
+    if not allow_ids:
+        raise ValueError("No banned visible channels configured.")
 
-    allow_channel = guild.get_channel(allow_channel_id)
-    if not isinstance(allow_channel, discord.abc.GuildChannel):
-        raise ValueError(f"Ban channel {allow_channel_id} not found.")
+    for channel_id in allow_ids:
+        channel = guild.get_channel(channel_id)
+        if not isinstance(channel, discord.abc.GuildChannel):
+            raise ValueError(f"Channel {channel_id} not found.")
 
+    allow_set = set(allow_ids)
     updated = 0
     for channel in guild.channels:
         if not isinstance(
@@ -197,7 +239,7 @@ async def setup_banned_role_permissions(guild: discord.Guild) -> tuple[int, int]
         ):
             continue
         try:
-            if channel.id == allow_channel_id:
+            if channel.id in allow_set:
                 await channel.set_permissions(
                     role,
                     view_channel=True,
@@ -206,7 +248,7 @@ async def setup_banned_role_permissions(guild: discord.Guild) -> tuple[int, int]
                     attach_files=True,
                     embed_links=True,
                     add_reactions=False,
-                    reason="Soft ban setup: ban appeal / ticket channel",
+                    reason="Soft ban setup: banned member channel access",
                 )
             else:
                 await channel.set_permissions(
@@ -222,4 +264,4 @@ async def setup_banned_role_permissions(guild: discord.Guild) -> tuple[int, int]
         except discord.HTTPException as exc:
             log.warning("Overwrite failed for channel %s: %s", channel.id, exc)
 
-    return updated, allow_channel_id
+    return updated, allow_ids

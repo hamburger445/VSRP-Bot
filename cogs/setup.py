@@ -215,12 +215,13 @@ class Setup(commands.Cog):
             return
         await defer(interaction)
         try:
-            updated, channel_id = await setup_banned_role_permissions(interaction.guild)
+            updated, channel_ids = await setup_banned_role_permissions(interaction.guild)
         except ValueError as exc:
             await interaction.followup.send(str(exc), ephemeral=True)
             return
+        mentions = ", ".join(f"<#{cid}>" for cid in channel_ids)
         await interaction.followup.send(
-            f"Updated **{updated}** channel overwrites. Banned role can only view <#{channel_id}>.",
+            f"Updated **{updated}** channel overwrites. Banned role can view: {mentions}.",
             ephemeral=True,
         )
 
