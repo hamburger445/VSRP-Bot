@@ -12,16 +12,19 @@ from utils.database import get_db
 
 log = logging.getLogger("vsrp_bot.soft_ban")
 
+DEFAULT_BANNED_ROLE_ID = 1553820949357535363
+DEFAULT_BANNED_CHANNEL_ID = 1250622854110773291
+
 
 def banned_role_id() -> int:
-    return int(load_config().get("moderation", {}).get("banned_role_id", 0))
+    raw = load_config().get("moderation", {}).get("banned_role_id") or DEFAULT_BANNED_ROLE_ID
+    return int(raw)
 
 
 def banned_channel_id() -> int:
-    return int(
-        load_config().get("moderation", {}).get("banned_channel_id", 0)
-        or load_config().get("channels", {}).get("tickets", 0)
-    )
+    mod = load_config().get("moderation", {})
+    raw = mod.get("banned_channel_id") or load_config().get("channels", {}).get("tickets") or DEFAULT_BANNED_CHANNEL_ID
+    return int(raw)
 
 
 def _banned_role(guild: discord.Guild) -> discord.Role | None:

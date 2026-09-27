@@ -16,7 +16,9 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.yaml"
+EXAMPLE_CONFIG_PATH = ROOT / "config.example.yaml"
 ENV_PATH = ROOT / ".env"
+_config_materialized = False
 
 load_dotenv(ENV_PATH, override=True)
 
@@ -33,11 +35,76 @@ except Exception:
 # --- config ---
 
 
-def load_config() -> dict[str, Any]:
-    if not CONFIG_PATH.exists():
-        raise FileNotFoundError("config.yaml not found. Create config.yaml with your server settings.")
+def _load_example_config() -> dict[str, Any]:
+    if not EXAMPLE_CONFIG_PATH.exists():
+        return {}
+    with open(EXAMPLE_CONFIG_PATH, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data if isinstance(data, dict) else {}
+
+
+def _deep_merge_missing(
+    base: dict[str, Any],
+    defaults: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Fill missing keys from defaults. Existing values in base are never overwritten."""
+    merged = dict(base)
+    changed = False
+    for key, default_value in defaults.items():
+        if key.startswith("_"):
+            continue
+        if key not in merged:
+            merged[key] = default_value
+            changed = True
+        elif isinstance(merged[key], dict) and isinstance(default_value, dict):
+            nested, nested_changed = _deep_merge_missing(merged[key], default_value)
+            if nested_changed:
+                merged[key] = nested
+                changed = True
+    return merged, changed
+
+
+def _ensure_config_file() -> None:
+    if CONFIG_PATH.exists():
+        return
+    if EXAMPLE_CONFIG_PATH.exists():
+        CONFIG_PATH.write_bytes(EXAMPLE_CONFIG_PATH.read_bytes())
+        log.info("Created config.yaml from config.example.yaml")
+        return
+    raise FileNotFoundError(
+        "config.yaml not found. Copy config.example.yaml to config.yaml with your server settings."
+    )
+
+
+def materialize_config_from_example() -> bool:
+    """Write new keys from config.example.yaml into config.yaml (once per process if changed)."""
+    global _config_materialized
+    _ensure_config_file()
     with open(CONFIG_PATH, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        current = yaml.safe_load(f) or {}
+    if not isinstance(current, dict):
+        current = {}
+    example = _load_example_config()
+    merged, changed = _deep_merge_missing(current, example)
+    if changed and not _config_materialized:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            yaml.dump(merged, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        _config_materialized = True
+        log.info("config.yaml updated with new keys from config.example.yaml")
+        return True
+    _config_materialized = True
+    return False
+
+
+def load_config() -> dict[str, Any]:
+    _ensure_config_file()
+    with open(CONFIG_PATH, encoding="utf-8") as f:
+        current = yaml.safe_load(f) or {}
+    if not isinstance(current, dict):
+        current = {}
+    example = _load_example_config()
+    merged, _ = _deep_merge_missing(current, example)
+    return merged
 
 
 def _clean_env(value: str) -> str:

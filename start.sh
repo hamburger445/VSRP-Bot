@@ -133,7 +133,10 @@ if [[ ! -f /home/container/bot.py ]]; then
   exit 1
 fi
 
-if [[ ! -f /home/container/config.yaml ]]; then
+if [[ ! -f /home/container/config.yaml ]] && [[ -f /home/container/config.example.yaml ]]; then
+  cp /home/container/config.example.yaml /home/container/config.yaml
+  echo "[Config] Created config.yaml from config.example.yaml"
+elif [[ ! -f /home/container/config.yaml ]]; then
   echo "[Bot] WARNING: config.yaml missing — upload it or copy from config.example.yaml."
 fi
 

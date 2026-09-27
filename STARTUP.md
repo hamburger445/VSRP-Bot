@@ -13,7 +13,9 @@ Many panels **hang forever on `git clone`** (no TTY, blocked git, or private rep
 | `GITHUB_BRANCH` | No | Default `main` |
 | `REQUIREMENTS_FILE` | No | Default `requirements.txt` |
 
-Upload **`config.yaml`** and **`.env`** once via SFTP. Restarts **keep** existing `.env` and `config.yaml` when updating code.
+Upload **`config.yaml`** and **`.env`** once via SFTP. Restarts **keep** existing `.env` and **`config.yaml`** when updating code, but the bot **merges new keys** from **`config.example.yaml`** into **`config.yaml`** on each start (your existing values are never overwritten).
+
+If **`config.yaml`** is missing, the panel script copies **`config.example.yaml`** automatically.
 
 ---
 

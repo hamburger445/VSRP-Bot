@@ -75,5 +75,10 @@ if [[ ! -f bot.py ]]; then
   exit 1
 fi
 
-echo "[Bot] Starting (slash commands sync automatically on startup)..."
+if [[ ! -f config.yaml ]] && [[ -f config.example.yaml ]]; then
+  cp config.example.yaml config.yaml
+  echo "[Config] Created config.yaml from config.example.yaml"
+fi
+
+echo "[Bot] Starting (config merges from config.example.yaml; slash commands sync on startup)..."
 exec "$PY" /home/container/bot.py

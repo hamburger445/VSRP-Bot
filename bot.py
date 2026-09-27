@@ -14,6 +14,7 @@ from utils.core import (
     format_sync_summary,
     get_token,
     load_config,
+    materialize_config_from_example,
     main_guild_objects,
     restrict_cog_guilds,
     shift_guild_objects,
@@ -201,6 +202,7 @@ class VSRPBot(commands.Bot):
 
 
 async def main():
+    materialize_config_from_example()
     bot = VSRPBot()
     async with bot:
         await bot.start(get_token())
