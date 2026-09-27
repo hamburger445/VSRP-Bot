@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Paste in panel as: cd /home/container && bash panel-start.sh
+# Panel startup: cd /home/container && bash panel-start.sh
 set -euo pipefail
 cd /home/container
 
@@ -9,21 +9,37 @@ B="${GITHUB_BRANCH:-main}"
 REQ="${REQUIREMENTS_FILE:-requirements.txt}"
 PY="${PYTHON:-/usr/local/bin/python}"
 
-if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-  echo "[GitHub] WARNING: GITHUB_TOKEN is empty — private repos will fail."
-  echo "         Set GITHUB_TOKEN in the panel Variables tab."
-fi
-
 T="$(mktemp -d)"
 A="$T/a.tar.gz"
 trap 'rm -rf "$T"' EXIT
 
-echo "[GitHub] Downloading ${R} (${B})..."
-curl -fSL --connect-timeout 20 --max-time 300 \
-  -H "Authorization: Bearer ${GITHUB_TOKEN:-}" \
-  -H "Accept: application/vnd.github+json" \
-  -L "https://api.github.com/repos/${R}/tarball/${B}" \
-  -o "$A"
+_download_auth() {
+  echo "[GitHub] Downloading ${R} (${B}) with token..."
+  curl -fSL --connect-timeout 20 --max-time 300 \
+    -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+    -H "Accept: application/vnd.github+json" \
+    -L "https://api.github.com/repos/${R}/tarball/${B}" \
+    -o "$A"
+}
+
+_download_public() {
+  echo "[GitHub] Downloading ${R} (${B}) (public archive)..."
+  curl -fSL --connect-timeout 20 --max-time 300 \
+    -L "https://github.com/${R}/archive/refs/heads/${B}.tar.gz" \
+    -o "$A"
+}
+
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+  if ! _download_auth; then
+    echo "[GitHub] Token download failed (401 = bad/expired token or wrong scopes)."
+    echo "[GitHub] Trying public archive URL..."
+    _download_public
+  fi
+else
+  echo "[GitHub] GITHUB_TOKEN not set in panel — using public download."
+  echo "         (Private repos: add GITHUB_TOKEN in panel Variables, not only .env)"
+  _download_public
+fi
 
 echo "[GitHub] Extracting..."
 tar -xzf "$A" -C "$T"
@@ -46,8 +62,18 @@ for f in "$S"/*; do
 done
 shopt -u dotglob nullglob 2>/dev/null || true
 
+if [[ ! -f "$REQ" ]]; then
+  echo "[Python] ERROR: ${REQ} not found."
+  exit 1
+fi
+
 echo "[Python] pip install -r ${REQ}..."
 pip install -U --user -r "$REQ"
 
-echo "[Bot] Starting..."
+if [[ ! -f bot.py ]]; then
+  echo "[Bot] ERROR: bot.py missing."
+  exit 1
+fi
+
+echo "[Bot] Starting (slash commands sync automatically on startup)..."
 exec "$PY" /home/container/bot.py

@@ -109,6 +109,8 @@ registration:
 
 moderation:
   appeals: 1513850693826384063
+  banned_role_id: 1553820949357535363
+  banned_channel_id: 1250622854110773291
 
 vehicles:
   max_per_member: 5

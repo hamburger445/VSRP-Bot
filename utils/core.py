@@ -184,11 +184,18 @@ def _command_names(commands_list: list[app_commands.AppCommand]) -> list[str]:
     return sorted(cmd.name for cmd in commands_list)
 
 
-async def sync_app_commands(tree: app_commands.CommandTree, guild_ids: list[int]) -> None:
+async def sync_app_commands(
+    tree: app_commands.CommandTree,
+    guild_ids: list[int],
+) -> dict[int, list[str]]:
+    """Push guild slash commands to Discord. Returns registered command names per guild."""
+    results: dict[int, list[str]] = {}
+
     if not guild_ids:
         synced = await tree.sync()
-        log.info("Synced %d global commands: %s", len(synced), ", ".join(_command_names(synced)))
-        return
+        names = _command_names(synced)
+        log.info("Synced %d global commands: %s", len(synced), ", ".join(names))
+        return {0: names}
 
     tree.clear_commands(guild=None)
     try:
@@ -202,6 +209,7 @@ async def sync_app_commands(tree: app_commands.CommandTree, guild_ids: list[int]
             synced = await tree.sync(guild=guild)
         except discord.HTTPException as exc:
             log.error("Failed to sync commands to guild %s: %s", guild_id, exc)
+            results[int(guild_id)] = []
             continue
 
         names = _command_names(synced)
@@ -212,6 +220,7 @@ async def sync_app_commands(tree: app_commands.CommandTree, guild_ids: list[int]
             log.info("Guild %s commands unchanged (already up to date)", guild_id)
 
         registered = _command_names(tree.get_commands(guild=guild))
+        results[int(guild_id)] = registered
         log.info("Guild %s registered commands: %s", guild_id, ", ".join(registered) or "(none)")
 
         if guild_id == guild_ids[0]:
@@ -226,6 +235,20 @@ async def sync_app_commands(tree: app_commands.CommandTree, guild_ids: list[int]
 
         if guild_id != guild_ids[-1]:
             await asyncio.sleep(1)
+
+    return results
+
+
+def format_sync_summary(results: dict[int, list[str]]) -> str:
+    if not results:
+        return "No guilds synced."
+    lines: list[str] = []
+    for guild_id, names in sorted(results.items()):
+        if guild_id == 0:
+            lines.append(f"Global: **{len(names)}** command(s)")
+        else:
+            lines.append(f"Guild `{guild_id}`: **{len(names)}** command(s)")
+    return "\n".join(lines)
 
 
 # --- interactions ---

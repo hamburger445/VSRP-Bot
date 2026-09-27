@@ -57,7 +57,7 @@ def _pool_timeout(key: str, default: int | None) -> float | None:
     return float(raw)
 
 
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
 
 
 def _to_pg_placeholders(query: str) -> str:
@@ -438,6 +438,19 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS soft_bans (
+            guild_id BIGINT NOT NULL,
+            user_id BIGINT NOT NULL,
+            saved_roles_json TEXT NOT NULL DEFAULT '[]',
+            active INTEGER NOT NULL DEFAULT 1,
+            case_id BIGINT,
+            moderator_id BIGINT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            lifted_at TIMESTAMPTZ,
+            PRIMARY KEY (guild_id, user_id)
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS applications (
             id SERIAL PRIMARY KEY,
             user_id BIGINT NOT NULL,
@@ -513,6 +526,7 @@ async def _migrate_legacy(conn: asyncpg.Connection) -> None:
         ("blackjack_games", "updated_at", "TIMESTAMPTZ DEFAULT NOW()"),
         ("support_tickets", "frozen", "INTEGER DEFAULT 0"),
         ("guild_settings", "permissions_json", "TEXT"),
+        ("soft_bans", "lifted_at", "TIMESTAMPTZ"),
     ]
     for table, column, definition in column_migrations:
         table_exists = await conn.fetchval(

@@ -9,6 +9,13 @@ from discord.ext import commands
 from utils.core import format_datetime, load_config
 from utils.database import get_db
 from utils.helpers import log_action
+from utils.soft_ban import (
+    apply_soft_ban,
+    enforce_soft_ban_on_join,
+    enforce_soft_ban_roles,
+    is_soft_banned,
+    remove_soft_ban,
+)
 from utils.permissions import (
     PERMISSION_DEFINITIONS,
     add_role_to_permissions,
@@ -458,7 +465,14 @@ async def _reverse_punishment(guild: discord.Guild, case: dict) -> None:
     user_id = case["user_id"]
     try:
         if action in ("ban", "modban"):
-            await guild.unban(discord.Object(id=user_id), reason=f"Appeal accepted case #{case['id']}")
+            if await is_soft_banned(guild.id, user_id):
+                await remove_soft_ban(
+                    guild,
+                    user_id,
+                    reason=f"Appeal accepted case #{case['id']}",
+                )
+            else:
+                await guild.unban(discord.Object(id=user_id), reason=f"Appeal accepted case #{case['id']}")
         elif action == "mute":
             member = guild.get_member(user_id)
             if member:
@@ -555,16 +569,17 @@ class BanModal(discord.ui.Modal, title="Issue Moderation Ban"):
             },
             appealable=appealable,
         )
-        discord_banned = False
-        if is_admin(self.moderator) and _hierarchy_ok(self.moderator, self.target)[0]:
-            if interaction.guild.me.guild_permissions.ban_members:
-                try:
-                    await self.target.ban(reason=f"Case #{case_id}: {reason}", delete_message_days=0)
-                    discord_banned = True
-                except discord.HTTPException:
-                    pass
+        soft_ok = False
+        soft_msg = ""
+        if _hierarchy_ok(self.moderator, self.target)[0]:
+            soft_ok, soft_msg = await apply_soft_ban(
+                self.target,
+                moderator_id=self.moderator.id,
+                case_id=case_id,
+                reason=f"Case #{case_id}: {reason}",
+            )
         await log_action(self.cog.bot, "mod_ban_record", self.moderator.id, target_id=self.target.id, details={"case_id": case_id}, channel_key="moderation")
-        extra = " Discord ban applied." if discord_banned else ""
+        extra = f" {soft_msg}" if soft_ok else (" Soft ban failed — check banned role and hierarchy." if _hierarchy_ok(self.moderator, self.target)[0] else "")
         await interaction.response.send_message(f"Ban recorded. Case **#{case_id}**.{extra}", ephemeral=True)
 
 
@@ -732,12 +747,16 @@ class Moderation(commands.Cog):
             dm_title="You have been banned",
             dm_fields={"Server": ctx.guild.name, "Reason": reason, "Moderator": str(ctx.author)},
         )
-        try:
-            await member.ban(reason=f"Case #{case_id}: {reason}", delete_message_days=0)
-        except discord.HTTPException:
-            await ctx.send(f"Case #{case_id} created but Discord ban failed.")
+        ok, msg = await apply_soft_ban(
+            member,
+            moderator_id=ctx.author.id,
+            case_id=case_id,
+            reason=f"Case #{case_id}: {reason}",
+        )
+        if not ok:
+            await ctx.send(f"Case #{case_id} created but soft ban failed: {msg}")
             return
-        await ctx.send(f"Banned {member.mention}. Case **#{case_id}**.")
+        await ctx.send(f"{msg} Case **#{case_id}**.")
 
     @commands.command(name="kick")
     async def kick(self, ctx: commands.Context, member: discord.Member, *, reason: str = "No reason provided"):
@@ -819,21 +838,53 @@ class Moderation(commands.Cog):
         await ctx.send(f"Unmuted {member.mention}. Case **#{case_id}**.")
 
     @commands.command(name="unban")
-    async def unban(self, ctx: commands.Context, user_id: int, *, reason: str = "Ban lifted"):
+    async def unban(self, ctx: commands.Context, target: str, *, reason: str = "Ban lifted"):
         if not can_ban(ctx.author):
             await ctx.send("You don't have permission to unban members.")
             return
+        raw = target.strip().strip("<@!>")
+        try:
+            user_id = int(raw)
+        except ValueError:
+            await ctx.send("Use a user ID or mention (e.g. `-unban 123456789` or `-unban @user`).")
+            return
+
+        if await is_soft_banned(ctx.guild.id, user_id):
+            ok, msg = await remove_soft_ban(ctx.guild, user_id, reason=reason)
+            if not ok:
+                await ctx.send(msg)
+                return
+            case_id = await self._record_action(ctx, user_id, "unban", reason, appealable=False)
+            await ctx.send(f"{msg} Case **#{case_id}**.")
+            return
+
         try:
             ban_entry = await ctx.guild.fetch_ban(discord.Object(id=user_id))
             await ctx.guild.unban(ban_entry.user, reason=reason)
         except discord.NotFound:
-            await ctx.send("That user is not banned.")
+            member = ctx.guild.get_member(user_id)
+            if member:
+                await ctx.send("That member is in the server and is not soft-banned.")
+            else:
+                await ctx.send("That user is not banned (Discord or soft ban).")
             return
         except discord.HTTPException:
             await ctx.send("Failed to unban.")
             return
         case_id = await self._record_action(ctx, user_id, "unban", reason, appealable=False)
         await ctx.send(f"Unbanned `{ban_entry.user}`. Case **#{case_id}**.")
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        if member.bot:
+            return
+        await enforce_soft_ban_on_join(member)
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        if before.roles == after.roles:
+            return
+        await enforce_soft_ban_roles(after)
 
     @commands.command(name="warn")
     async def warn(self, ctx: commands.Context, member: discord.Member, *, reason: str = "No reason provided"):

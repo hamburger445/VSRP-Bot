@@ -11,6 +11,7 @@ from discord.ext import commands
 from utils.core import (
     all_guild_ids,
     all_guild_objects,
+    format_sync_summary,
     get_token,
     load_config,
     main_guild_objects,
@@ -144,13 +145,16 @@ class VSRPBot(commands.Bot):
             registered.extend(f"{cmd.name}@{gid}" for cmd in self.tree.get_commands(guild=g))
         log.info("Guild-scoped slash commands: %s", ", ".join(sorted(set(registered))) or "(none)")
 
-        await self._sync_commands(all_guild_ids())
+        results = await self._sync_commands(all_guild_ids())
+        if results is not None:
+            log.info("Startup slash sync: %s", format_sync_summary(results).replace("**", ""))
 
-    async def _sync_commands(self, guild_ids: list[int]) -> None:
+    async def _sync_commands(self, guild_ids: list[int]) -> dict[int, list[str]] | None:
         try:
-            await sync_app_commands(self.tree, guild_ids)
+            return await sync_app_commands(self.tree, guild_ids)
         except Exception:
             log.exception("Slash command sync failed")
+            return None
 
     async def on_ready(self):
         if not getattr(self, "_resynced_commands", False):

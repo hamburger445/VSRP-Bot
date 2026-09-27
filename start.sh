@@ -137,5 +137,5 @@ if [[ ! -f /home/container/config.yaml ]]; then
   echo "[Bot] WARNING: config.yaml missing — upload it or copy from config.example.yaml."
 fi
 
-echo "[Bot] Starting..."
+echo "[Bot] Starting (slash commands sync automatically on startup)..."
 exec "${PYTHON}" /home/container/bot.py

@@ -85,6 +85,9 @@ def _help_sections() -> dict[str, dict]:
             "visible": lambda m: is_staff(m),
             "commands": [
                 ("/setup-permissions", "Configure permissions for this server (main vs FD/PD options differ)"),
+                ("/setup-soft-ban", "Lock banned role to the ban/ticket channel only (admin)"),
+                ("/sync", "Re-sync slash commands after a deploy (admin)"),
+                (f"{p}sync", "Same as /sync (admin)"),
                 (f"{p}role mod warn moderate", "Assign bot permissions to a role (partial names work)"),
             ],
         },

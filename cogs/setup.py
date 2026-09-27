@@ -2,7 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils.core import reply, server_label
+from utils.core import all_guild_ids, defer, format_sync_summary, reply, server_label, sync_app_commands
+from utils.soft_ban import setup_banned_role_permissions
 from utils.permissions import (
     PERMISSION_DEFINITIONS,
     is_admin,
@@ -138,9 +139,49 @@ class SetupPermissionsView(discord.ui.View):
         self.add_item(PermissionTypeSelect(guild_id))
 
 
+def _can_run_setup(member: discord.Member) -> bool:
+    return is_admin(member) or is_god(member)
+
+
 class Setup(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    async def _run_slash_sync(self) -> dict[int, list[str]] | None:
+        if hasattr(self.bot, "_sync_commands"):
+            return await self.bot._sync_commands(all_guild_ids())
+        return await sync_app_commands(self.bot.tree, all_guild_ids())
+
+    @app_commands.command(
+        name="sync",
+        description="Re-sync slash commands to all configured servers (admin)",
+    )
+    @app_commands.default_permissions(administrator=True)
+    async def sync_slash(self, interaction: discord.Interaction):
+        if not isinstance(interaction.user, discord.Member) or not _can_run_setup(interaction.user):
+            await reply(interaction, "Admin only.", ephemeral=True)
+            return
+        await defer(interaction)
+        results = await self._run_slash_sync()
+        if results is None:
+            await interaction.followup.send("Slash sync failed — check bot logs.", ephemeral=True)
+            return
+        await interaction.followup.send(
+            f"Slash commands synced.\n{format_sync_summary(results)}",
+            ephemeral=True,
+        )
+
+    @commands.command(name="sync")
+    @commands.guild_only()
+    async def sync_prefix(self, ctx: commands.Context):
+        if not isinstance(ctx.author, discord.Member) or not _can_run_setup(ctx.author):
+            await ctx.send("Admin only.")
+            return
+        results = await self._run_slash_sync()
+        if results is None:
+            await ctx.send("Slash sync failed — check bot logs.")
+            return
+        await ctx.send(f"Slash commands synced.\n{format_sync_summary(results)}")
 
     @app_commands.command(
         name="setup-permissions",
@@ -159,6 +200,29 @@ class Setup(commands.Cog):
         embed = _format_permissions_embed(interaction.guild, perms)
         view = SetupPermissionsView(self.bot, interaction.guild.id)
         await reply(interaction, embed=embed, view=view, ephemeral=True)
+
+    @app_commands.command(
+        name="setup-soft-ban",
+        description="Set channel permissions so the banned role only sees the ban/ticket channel",
+    )
+    @app_commands.default_permissions(administrator=True)
+    async def setup_soft_ban(self, interaction: discord.Interaction):
+        if not is_admin(interaction.user) and not is_god(interaction.user):
+            await reply(interaction, "Admin only.", ephemeral=True)
+            return
+        if not interaction.guild:
+            await reply(interaction, "Run this in a server.", ephemeral=True)
+            return
+        await defer(interaction)
+        try:
+            updated, channel_id = await setup_banned_role_permissions(interaction.guild)
+        except ValueError as exc:
+            await interaction.followup.send(str(exc), ephemeral=True)
+            return
+        await interaction.followup.send(
+            f"Updated **{updated}** channel overwrites. Banned role can only view <#{channel_id}>.",
+            ephemeral=True,
+        )
 
 
 async def setup(bot: commands.Bot):
