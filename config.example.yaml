@@ -1,0 +1,309 @@
+database:
+  pool_min: 1
+  pool_max: 3
+  query_timeout_seconds: 5
+  command_timeout_seconds: 5
+  connect_timeout_seconds: 5
+
+bot:
+  prefix: "-"
+  activity_name: "VSRC Sessions"
+  activity_type: "watching"
+
+guild:
+  id: 1244711126348992603
+
+servers:
+  main:
+    id: 1244711126348992603
+    label: Main RP
+  fd:
+    id: 1514304919568384100
+    label: Fire Department
+    staff_role: 0
+    admin_role: 0
+  pd:
+    id: 1514314745946177787
+    label: City PD
+    staff_role: 0
+    admin_role: 0
+
+guild_roles:
+  1244711126348992603:
+    staff: 1513623449715609800
+    admin: 1513623576694100020
+
+owners:
+  - 1391201462259810354
+  - 1216210215939211375
+
+emojis: {}
+
+roles:
+  member: 1244718289616244789
+  licensed: 0
+  license_suspended: 0
+  insured: 0
+  vehicle_registered: 0
+  admin: 1513623576694100020
+  staff: 1513623449715609800
+  session_host: 0
+  departments:
+    fire1: 1244720312101109761
+    fire2: 1244719857581424660
+    police1: 1244720480011812977
+    police2: 1244720384457052262
+    ems: 1244719576206282805
+    dot: 1513623179854217327
+    dispatch: 1513622907849539696
+  department_names:
+    fire1: Wytheville Fire & Rescue
+    fire2: Rural Retreat Volunteer Fire Department
+    police1: Wythe County Sheriffs Office
+    police2: Wytheville Police Department
+
+channels:
+  session_announcements: 1513625134106153011
+  session_votes: 1513625134106153011
+  session_host_notify: 1513726786649723006
+  vehicle_registration: 1513627430835716116
+  criminal_records: 1513627430835716116
+  citations: 1513626668516905151
+  warrants: 1513626619108004110
+  department_pings: 1513626880081793095
+  tickets: 1250622854110773291
+  ticket_logs: 1513625621752975512
+  info_panel: 1250620475722174575
+  welcome: 1250611329635717172
+  updates: 1250622030240546887
+  rules: 1250613385284812912
+  logs:
+    bot: 1513640810611081466
+    economy: 1513640829875654757
+    support: 1513625621752975512
+
+categories:
+  tickets: 1513624730752778343
+
+sessions:
+  join_code: VSRC
+
+github:
+  repo: hamburger445/VSRP-Bot
+  branch: main
+  data_path: data
+
+erlc:
+  channel: 1513730424310857819
+  update_interval_seconds: 60
+
+registration:
+  vehicle_month_days: 30
+  vehicle_renew_cost: 32
+  license_months: 2
+  license_cost: 37
+  insurance_months: 1
+  insurance_cost: 31
+  license_buyback_cost: 500
+  registration_buyback_cost: 500
+
+moderation:
+  appeals: 1513850693826384063
+
+vehicles:
+  max_per_member: 5
+
+trailers:
+  max_per_member: 3
+
+citation_tickets:
+  unpaid_suspend_threshold: 5
+  unpaid_warrant_threshold: 7
+
+economy:
+  starting_wallet: 1000
+  starting_bank: 0
+  daily_amount: 500
+  daily_cooldown_hours: 24
+  work_min: 100
+  work_max: 350
+  work_cooldown_minutes: 30
+  work_jobs:
+    - Delivery Driver
+    - Mechanic
+    - Cashier
+    - Security Guard
+    - Tow Operator
+
+blackjack:
+  min_bet: 10
+  max_bet: 10000
+  cooldown_seconds: 5
+
+support_tickets:
+  ping_role: 1513623449715609800
+  support_roles:
+    - 1513623449715609800
+    - 1513623576694100020
+  categories:
+    - id: general
+      label: "General Support"
+      description: "General questions and help"
+    - id: report
+      label: "Player Report"
+      description: "Report a player for rule violations"
+    - id: appeal
+      label: "Appeal"
+      description: "Ban or punishment appeal"
+
+rules:
+  title: "VSRP Server Rules"
+  color: 15158332
+  content: |
+    Review the full server rules here:
+    https://docs.google.com/document/d/1SNq1WUZRn_z9iZOY-BpU6uxch1HVXJjj/edit?usp=sharing&ouid=104985960847666677165&rtpof=true&sd=true
+
+    Penal codes are available here:
+    https://docs.google.com/spreadsheets/d/1L4mvKC6ir5J5bYgoIgD5H9J-Il_0czwI/edit?usp=sharing&ouid=104985960847666677165&rtpof=true&sd=true
+
+verification:
+  channel_id: 1250612127891197953
+  verified_role_id: 1250612203850170390
+  pending_role_id: 1250611712642781291
+
+applications:
+  submission_channel_id: 1513940631779807232
+  panel_channel_id: 1513916429089509496
+  reviewer_role_id: 1513623576694100020
+  reviewer_role_ids:
+    - 1279634474333634635
+  pending_role_id: 1514256466398154752
+  approved_role_id: 1244718289616244789
+  questions:
+    - question: "Roblox Username & Profile Link"
+      type: "text"
+    - question: "Discord Username & ID"
+      type: "text"
+    - question: "Are you 13+?"
+      type: "select"
+      options:
+        - "Yes"
+        - "No"
+    - question: "On a scale of 1 to 10, how mature and professional do you think you are?"
+      type: "select"
+      options:
+        - "1"
+        - "2"
+        - "3"
+        - "4"
+        - "5"
+        - "6"
+        - "7"
+        - "8"
+        - "9"
+        - "10"
+    - question: "Why do you want to join WCVA? (2+ Sentences)"
+      type: "text"
+    - question: "Do you understand strict roleplay servers?"
+      type: "select"
+      options:
+        - "Yes"
+        - "No"
+    - question: "Have you ever been in a strict roleplay server?"
+      type: "select"
+      options:
+        - "Yes"
+        - "No"
+    - question: "Do you plan on joining a department or becoming whitelisted in WCVA?"
+      type: "select"
+      options:
+        - "Yes"
+        - "No"
+    - question: "Do you understand that you can be denied for any given reason?"
+      type: "select"
+      options:
+        - "Yes"
+        - "No"
+
+info_panel:
+  title: "Community Information"
+  description: |
+    Welcome to the server. Use the buttons below to quickly access important information about our community, departments, and roleplay resources.
+
+    **Getting Started**
+    Before participating in roleplay, please read through the Rules and Penal Code. These resources explain our expectations, roleplay standards, and community guidelines.
+
+    **Community Resources**
+    Use the navigation buttons below to learn more about our departments, frequently asked questions, and other important server information.
+  footer: "Thank you for being a member of our community."
+  color: 3447003
+  sections:
+    server_information:
+      title: "Server Information"
+      content: |
+        Welcome to Wythe County Roleplay. Please read and review the resources below before participating in roleplay.
+
+        **Server Rules**
+        Read the server rules here: https://docs.google.com/document/d/1SNq1WUZRn_z9iZOY-BpU6uxch1HVXJjj/edit?usp=sharing&ouid=104985960847666677165&rtpof=true&sd=true
+
+        **Penal Codes**
+        Review the penal codes here: https://docs.google.com/spreadsheets/d/1L4mvKC6ir5J5bYgoIgD5H9J-Il_0czwI/edit?usp=sharing&ouid=104985960847666677165&rtpof=true&sd=true
+      button_label: "Server Information"
+    departments:
+      title: "Departments"
+      content: |
+        Explore the main roleplay departments and how to connect with department staff.
+
+        **Wythe County Sheriffs Office**
+        **Wythe County Fire & Rescue**
+        **EMS and dispatch resources**
+      button_label: "Departments"
+    rules:
+      title: "Server Rules"
+      content: |
+        Review the complete server rules covering conduct, roleplay expectations, and community standards.
+      url: https://docs.google.com/document/d/1SNq1WUZRn_z9iZOY-BpU6uxch1HVXJjj/edit?usp=sharing&ouid=104985960847666677165&rtpof=true&sd=true
+      button_label: "Rules"
+    penal_code:
+      title: "Penal Code"
+      content: |
+        Access the penal code document to understand offenses, consequences, and roleplay expectations.
+      url: https://docs.google.com/spreadsheets/d/1L4mvKC6ir5J5bYgoIgD5H9J-Il_0czwI/edit?usp=sharing&ouid=104985960847666677165&rtpof=true&sd=true
+      button_label: "Penal Code"
+    faq:
+      title: "Frequently Asked Questions"
+      content: |
+        Find answers to common roleplay questions, server procedures, and onboarding guidance.
+        If you still need help, open a support ticket through the ticket panel.
+      button_label: "FAQ"
+    applications:
+      title: "Civilian Applications"
+      content: |
+        Ready to apply for civilian roles? Use `/apply` or ask staff to post the application panel.
+        Applications are completed through direct messages and are reviewed by staff.
+      button_label: "Applications"
+
+department_pings:
+  events:
+fire_spawn:
+  label: "FD Emergency Call"
+  departments: [fire1, fire2]
+  message: "An emergency call has been received requesting fire department assistance. Fire personnel are requested to respond and handle the incident as appropriate."
+
+robbery:
+  label: "PD Emergency Call"
+  departments: [police1, police2]
+  message: "An emergency call has been received requesting law enforcement assistance. Police units are requested to respond and handle the incident as appropriate."
+
+medical:
+  label: "Medical Emergency"
+  departments: [ems]
+  message: "A medical emergency has been reported. EMS personnel are requested to respond, assess the patient, and provide the appropriate level of care."
+
+traffic:
+  label: "Traffic Incident"
+  departments: [dot]
+  message: "A traffic incident has been reported. DOT personnel are requested to respond and assist with traffic control, roadway hazards, and scene management as needed."
+
+reaction_roles:
+  default_roles: []
