@@ -1,0 +1,148 @@
+VSRP BOT — WHAT IT DOES (simple overview)
+=========================================
+
+Prefix: - (most staff/mod commands)
+Slash commands: / (most player and staff tools)
+
+Servers
+-------
+- Main RP server: sessions, economy, LEO, tickets, verification, applications, most features.
+- FD and PD shift servers: moderation, help, setup, shift tracking.
+- Bot syncs slash commands on startup and with /sync or -sync (admin).
+
+
+When you join (main server)
+---------------------------
+- Welcome message in the welcome channel.
+- Autorole gives pending verification / application roles as configured.
+
+
+Verification & applications
+---------------------------
+- /verify — verify your account for departments and applications.
+- /apply — start a civilian application.
+- /application-status — check your application.
+
+
+Help
+----
+- /help — menu of commands you can use based on your rank.
+
+
+Profiles & registration
+-----------------------
+- /profile — dashboard (vehicles, tickets, warrants, economy, etc.).
+- /registervehicle — register a vehicle.
+- /registertrailer — register a trailer.
+- Staff: /adminview — full member overview.
+
+
+Economy & shop
+--------------
+- /economy balance — wallet and bank.
+- /economy daily — daily reward.
+- /economy work — earn money on cooldown.
+- /economy pay — send money to someone.
+- /economy leaderboard — richest members.
+- /shop — buy licenses, insurance, registrations, etc.
+- /blackjack — gamble (config limits).
+- Staff: /economyadmin add|remove|freeze|unfreeze — manage accounts.
+
+
+Roleplay sessions (main, staff)
+-------------------------------
+- /startup — post a session vote; ✅ reactions start the session when enough.
+- /over — end session and purge startup channel.
+- /session-status — is a session active?
+- ERLC status embed updates in the configured channel (live server info when API key set).
+
+
+Law enforcement (LEO)
+---------------------
+- /leo-panel — panel for LEO actions.
+- /citation — issue a citation (fine).
+- /warrant — create a warrant.
+- /removewarrant — remove by ID.
+- /warrant-check — check someone’s warrants.
+- /pager send — page a department.
+- Unpaid citations can suspend license / warrant thresholds (config).
+
+
+Support tickets
+---------------
+- Ticket panel in the tickets channel (staff can post with /ticket-panel).
+- Categories: general, report, appeal, etc.
+- Private ticket channels for the user and support roles.
+- Ticket logs and transcripts.
+
+
+Moderation (prefix - and some slash)
+------------------------------------
+Cases & logs
+- Every action creates a case number in the database.
+- -modlogs @user — recent cases.
+- -case <#> — view case; -case delete <#> — remove record (staff).
+- -reason <case#> <text> — edit case reason.
+
+Punishments
+- -warn / strikes via /strike (modal with proof).
+- -kick, -mute, -unmute.
+- -softban / /softban — softban: banned role + extra role, limited channels, appeal via ticket (not DM button). Notice embed in softban channel. Second softban auto hardbans.
+- -hardban / /hardban — full Discord ban, not appealable.
+- -ban — alias for softban.
+- /modban — same as softban (modal).
+- -purge / -clear — delete messages (staff).
+
+Unban
+- -unban or /unban — lifts softban OR Discord hardban.
+- Restores configured unban roles (member, verified, etc.).
+- If they were hardbanned and rejoin later, roles apply on join.
+
+Softban rules
+- Banned role strips other roles; keeps banned + accompany role(s).
+- Bot re-strips extra roles if someone adds roles while soft-banned.
+- /setup-soft-ban — channel permissions so banned users only see appeal/ticket + softban notice channels.
+
+Appeals
+- Strikes and some cases: DM appeal button.
+- Softbans: appeal through tickets with case number from the notice channel/DM.
+
+Permissions setup
+- /setup-permissions — assign which Discord roles can staff, mod, ban, LEO, sessions, shifts (per server).
+- -role <partial name> warn|moderate|ban|… — attach bot permissions to a role.
+
+
+Panels & UI (staff, main)
+-------------------------
+- /info-panel — server info panel.
+- /post-rules — rules to rules channel.
+- /reactionrole create|add|remove — reaction role panels.
+- Department pager panel auto-posts; buttons page FD/PD/etc.
+
+
+Shifts (FD/PD servers)
+----------------------
+- /shift manage — start, break, stop your shift.
+- /shift admin — staff manage someone’s shift.
+
+
+Admin & owners
+--------------
+- /update — post official updates.
+- /payticket — pay a citation by ID.
+- /owner-panel — owner tools for a user.
+- /say — owners make the bot say something in a channel.
+
+
+Setup & deploy
+--------------
+- Config in config.yaml (new keys merge from config.example.yaml on bot start).
+- PostgreSQL database for cases, economy, tickets, permissions, soft bans, etc.
+- GitHub deploy: panel pulls latest code, keeps .env and config.yaml, runs bot.
+- Permissions can mirror to GitHub data folder when saved.
+
+
+Misc
+----
+- Joke reply if someone says "67" in chat.
+- Bot activity/status from config.

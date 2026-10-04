@@ -19,7 +19,9 @@ DEFAULT_UNBAN_RESTORE_ROLE_IDS = (
     1244718289616244789,
     1514256466398154752,
     1250612203850170390,
+    1513915102938529802,
 )
+DEFAULT_SOFTBAN_ACCOMPANY_ROLE_IDS = (1513915102938529802,)
 
 SOFTBAN_CASE_ACTIONS = ("softban", "ban", "modban")
 
@@ -40,6 +42,34 @@ def unban_restore_role_ids() -> list[int]:
     if cfg:
         return [int(r) for r in cfg]
     return list(DEFAULT_UNBAN_RESTORE_ROLE_IDS)
+
+
+def softban_accompany_role_ids() -> list[int]:
+    cfg = load_config().get("moderation", {}).get("softban_accompany_role_ids")
+    if cfg:
+        return [int(r) for r in cfg]
+    return list(DEFAULT_SOFTBAN_ACCOMPANY_ROLE_IDS)
+
+
+def _allowed_softban_role_ids(guild: discord.Guild) -> set[int]:
+    allowed = {guild.default_role.id}
+    banned = _banned_role(guild)
+    if banned:
+        allowed.add(banned.id)
+    for role_id in softban_accompany_role_ids():
+        allowed.add(role_id)
+    return allowed
+
+
+def _softban_roles(guild: discord.Guild) -> list[discord.Role]:
+    roles: list[discord.Role] = []
+    seen: set[int] = set()
+    for role_id in (banned_role_id(), *softban_accompany_role_ids()):
+        role = guild.get_role(role_id)
+        if role and role.id not in seen:
+            seen.add(role.id)
+            roles.append(role)
+    return roles
 
 
 def _pending_unban_state_key(guild_id: int, user_id: int) -> str:
@@ -172,10 +202,14 @@ async def apply_soft_ban(
     if role in member.roles and await is_soft_banned(member.guild.id, member.id):
         return False, f"{member.mention} is already soft-banned."
 
-    saved = [r.id for r in member.roles if r != member.guild.default_role and r.id != role.id]
+    keep_ids = {role.id, *softban_accompany_role_ids()}
+    saved = [r.id for r in member.roles if r != member.guild.default_role and r.id not in keep_ids]
+    assign = _softban_roles(member.guild)
+    if not assign:
+        return False, "Banned role is not configured or not found in this server."
 
     try:
-        await member.edit(roles=[role], reason=f"{reason} (case #{case_id})" if case_id else reason)
+        await member.edit(roles=assign, reason=f"{reason} (case #{case_id})" if case_id else reason)
     except discord.Forbidden:
         return False, "I cannot change this member's roles (check role hierarchy)."
     except discord.HTTPException as exc:
@@ -282,11 +316,12 @@ async def enforce_soft_ban_on_join(member: discord.Member) -> None:
     banned = _banned_role(member.guild)
     if not banned:
         return
-    allowed_ids = {member.guild.default_role.id, banned.id}
+    assign = _softban_roles(member.guild)
+    allowed_ids = _allowed_softban_role_ids(member.guild)
     if all(r.id in allowed_ids for r in member.roles) and banned in member.roles:
         return
     try:
-        await member.edit(roles=[banned], reason="Soft ban: rejoin — banned role only")
+        await member.edit(roles=assign, reason="Soft ban: rejoin — restore banned roles")
     except discord.HTTPException:
         log.warning("Could not enforce soft ban on join for %s", member.id)
 
@@ -299,18 +334,20 @@ async def enforce_soft_ban_roles(member: discord.Member) -> bool:
     if not banned:
         return False
 
-    allowed_ids = {member.guild.default_role.id, banned.id}
+    allowed_ids = _allowed_softban_role_ids(member.guild)
+    assign = _softban_roles(member.guild)
     extra = [r for r in member.roles if r.id not in allowed_ids]
     if not extra:
-        if banned not in member.roles:
+        missing = [r for r in assign if r not in member.roles]
+        if missing:
             try:
-                await member.add_roles(banned, reason="Soft ban: restore banned role")
+                await member.add_roles(*missing, reason="Soft ban: restore banned roles")
             except discord.HTTPException:
                 pass
         return False
 
     try:
-        await member.edit(roles=[banned], reason="Soft ban: removed unauthorized roles")
+        await member.edit(roles=assign, reason="Soft ban: removed unauthorized roles")
         return True
     except discord.HTTPException:
         log.warning("Could not enforce soft ban roles for %s", member.id)
