@@ -125,6 +125,10 @@ Shifts (FD/PD servers)
 - /shift manage — start, break, stop your shift.
 - /shift admin — staff manage someone’s shift.
 
+Wytheville PD (City PD server only)
+----------------------------------
+- /pd setup — Administrator only; creates/updates WPD roles, categories, channels, and permissions (safe to run again; never wipes the server).
+
 
 Admin & owners
 --------------

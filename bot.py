@@ -16,6 +16,7 @@ from utils.core import (
     load_config,
     materialize_config_from_example,
     main_guild_objects,
+    pd_guild_objects,
     restrict_cog_guilds,
     shift_guild_objects,
     sync_app_commands,
@@ -50,6 +51,7 @@ COGS = [
     "cogs.autorole",
     "cogs.misc",
     "cogs.shifts",
+    "cogs.pd_setup",
     "cogs.setup",
 ]
 
@@ -73,6 +75,7 @@ MAIN_ONLY_MODULES = frozenset({
 })
 
 SHIFT_ONLY_MODULES = frozenset({"cogs.shifts"})
+PD_ONLY_MODULES = frozenset({"cogs.pd_setup"})
 
 ALL_GUILD_MODULES = frozenset({
     "cogs.moderation",
@@ -137,6 +140,8 @@ class VSRPBot(commands.Bot):
                 restrict_cog_guilds(self, cog, main_guild_objects())
             elif mod in SHIFT_ONLY_MODULES:
                 restrict_cog_guilds(self, cog, shift_guild_objects())
+            elif mod in PD_ONLY_MODULES:
+                restrict_cog_guilds(self, cog, pd_guild_objects())
             elif mod in ALL_GUILD_MODULES:
                 restrict_cog_guilds(self, cog, all_guild_objects())
 

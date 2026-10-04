@@ -204,6 +204,10 @@ def shift_guild_objects() -> list[discord.Object]:
     return guild_objects(shift_guild_ids())
 
 
+def pd_guild_objects() -> list[discord.Object]:
+    return guild_objects([pd_guild_id()])
+
+
 def all_guild_objects() -> list[discord.Object]:
     return guild_objects(all_guild_ids())
 
