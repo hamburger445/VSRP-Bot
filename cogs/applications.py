@@ -171,6 +171,7 @@ class ReviewReasonModal(discord.ui.Modal, title="Application Review Reason"):
         self.accepted = accepted
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
+        await defer(interaction)
         await _review_application(
             interaction,
             self.application_id,
@@ -232,6 +233,9 @@ async def _review_application(
     accepted: bool,
     reason: str | None = None,
 ) -> None:
+    if not interaction.response.is_done():
+        await defer(interaction)
+
     review_role_ids = reviewer_role_ids()
     allowed = False
     if interaction.guild:

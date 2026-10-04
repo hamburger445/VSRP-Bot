@@ -57,7 +57,7 @@ def _pool_timeout(key: str, default: int | None) -> float | None:
     return float(raw)
 
 
-_SCHEMA_VERSION = 4
+_SCHEMA_VERSION = 5
 
 
 def _to_pg_placeholders(query: str) -> str:
@@ -527,6 +527,9 @@ async def _migrate_legacy(conn: asyncpg.Connection) -> None:
         ("support_tickets", "frozen", "INTEGER DEFAULT 0"),
         ("guild_settings", "permissions_json", "TEXT"),
         ("soft_bans", "lifted_at", "TIMESTAMPTZ"),
+        ("applications", "reviewer_id", "BIGINT"),
+        ("applications", "reviewed_at", "TIMESTAMPTZ"),
+        ("applications", "review_reason", "TEXT"),
     ]
     for table, column, definition in column_migrations:
         table_exists = await conn.fetchval(

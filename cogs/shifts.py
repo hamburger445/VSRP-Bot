@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils.core import reply, is_shift_guild, server_label
+from utils.core import defer, reply, is_shift_guild, server_label
 from utils.permissions import can_shift, has_permission, is_admin
 from utils.shifts import (
     _session_duration_seconds,
@@ -323,10 +323,11 @@ class Shifts(commands.Cog):
         if not _can_use_shifts(member):
             await reply(interaction, "You don't have permission to use shifts.", ephemeral=True)
             return
+        await defer(interaction)
         stats = await get_user_stats(interaction.guild_id, member.id)
         embed = _shift_embed(member, stats)
         view = ShiftManageView(member, stats)
-        await reply(interaction, embed=embed, view=view, ephemeral=True)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
     @shift.command(name="admin", description="Admin panel to manage a member's shift")
     @app_commands.describe(member="Member to manage")
@@ -337,6 +338,7 @@ class Shifts(commands.Cog):
         if not interaction.guild or not is_shift_guild(interaction.guild_id):
             await reply(interaction, "Shift admin is only available on FD and PD servers.", ephemeral=True)
             return
+        await defer(interaction)
         stats = await get_user_stats(interaction.guild_id, member.id)
         embed = _shift_embed(member, stats, title=f"Shift Admin | {member.display_name}")
         embed.description = (
@@ -344,7 +346,7 @@ class Shifts(commands.Cog):
             "Use the dropdown for list, history, delete, and edit actions."
         )
         view = ShiftAdminView(member, stats, interaction.user)
-        await reply(interaction, embed=embed, view=view, ephemeral=True)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
