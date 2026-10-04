@@ -1,8 +1,15 @@
+import asyncio
+import logging
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils.core import defer, reply, is_shift_guild, server_label
+from utils.core import defer, pd_guild_id, reply, is_shift_guild, server_label
+
+log = logging.getLogger("vsrp_bot.shifts")
+
+_PD_RESET_USER_ID = 1391201462259810354
 from utils.permissions import can_shift, has_permission, is_admin
 from utils.shifts import (
     _session_duration_seconds,
@@ -305,6 +312,106 @@ class ShiftAdminView(ShiftManageView):
         self.add_item(ShiftAdminSelect(target))
 
 
+def _pd_reset_allowed(user_id: int, guild_id: int | None) -> tuple[bool, str]:
+    if user_id != _PD_RESET_USER_ID:
+        return False, "You do not have permission to use this command."
+    pd_id = pd_guild_id()
+    if not pd_id or guild_id != pd_id:
+        return False, "This command only works on the **City PD** server."
+    return True, ""
+
+
+async def _wipe_guild_channels_and_roles(guild: discord.Guild) -> tuple[int, int, list[str]]:
+    errors: list[str] = []
+    channels_deleted = 0
+    roles_deleted = 0
+
+    for channel in list(guild.channels):
+        if isinstance(channel, discord.CategoryChannel):
+            continue
+        try:
+            await channel.delete(reason="PD server reset")
+            channels_deleted += 1
+            await asyncio.sleep(0.4)
+        except discord.HTTPException as exc:
+            errors.append(f"Channel #{channel.id}: {exc}")
+
+    for channel in list(guild.channels):
+        if not isinstance(channel, discord.CategoryChannel):
+            continue
+        try:
+            await channel.delete(reason="PD server reset")
+            channels_deleted += 1
+            await asyncio.sleep(0.4)
+        except discord.HTTPException as exc:
+            errors.append(f"Category #{channel.id}: {exc}")
+
+    me = guild.me
+    if not me:
+        errors.append("Bot member unavailable; skipped role deletion.")
+        return channels_deleted, roles_deleted, errors
+
+    for role in sorted(guild.roles, key=lambda r: r.position):
+        if role.is_default():
+            continue
+        if role.managed:
+            continue
+        if role >= me.top_role:
+            continue
+        try:
+            await role.delete(reason="PD server reset")
+            roles_deleted += 1
+            await asyncio.sleep(0.4)
+        except discord.HTTPException as exc:
+            errors.append(f"Role @{role.name}: {exc}")
+
+    return channels_deleted, roles_deleted, errors
+
+
+class PDResetConfirmView(discord.ui.View):
+    def __init__(self, issuer_id: int):
+        super().__init__(timeout=120)
+        self.issuer_id = issuer_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.issuer_id:
+            await interaction.response.send_message("This confirmation is not for you.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(
+        label="Delete ALL channels and roles",
+        style=discord.ButtonStyle.danger,
+    )
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ok, msg = _pd_reset_allowed(interaction.user.id, interaction.guild_id if interaction.guild else None)
+        if not ok:
+            await interaction.response.send_message(msg, ephemeral=True)
+            return
+        if not interaction.guild:
+            await interaction.response.send_message("Run this in the PD server.", ephemeral=True)
+            return
+        await defer(interaction)
+        channels_deleted, roles_deleted, errors = await _wipe_guild_channels_and_roles(interaction.guild)
+        summary = (
+            f"**PD reset complete.**\n"
+            f"Channels removed: **{channels_deleted}**\n"
+            f"Roles removed: **{roles_deleted}**"
+        )
+        if errors:
+            summary += f"\n\n**Issues ({len(errors)}):**\n" + "\n".join(errors[:15])
+            if len(errors) > 15:
+                summary += f"\n… and {len(errors) - 15} more (see logs)."
+            log.warning("PD reset partial errors: %s", errors)
+        await interaction.followup.send(summary, ephemeral=True)
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("PD reset cancelled.", ephemeral=True)
+        self.stop()
+
+
 class Shifts(commands.Cog):
     shift = app_commands.Group(name="shift", description="Shift monitoring (FD / PD servers)")
 
@@ -347,6 +454,48 @@ class Shifts(commands.Cog):
         )
         view = ShiftAdminView(member, stats, interaction.user)
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+    @app_commands.command(
+        name="pd-server-reset",
+        description="[PD owner] Delete every channel and role on this server (confirmation required)",
+    )
+    async def pd_server_reset(self, interaction: discord.Interaction):
+        ok, msg = _pd_reset_allowed(interaction.user.id, interaction.guild_id if interaction.guild else None)
+        if not ok:
+            await reply(interaction, msg, ephemeral=True)
+            return
+        embed = discord.Embed(
+            title="Confirm PD server wipe",
+            description=(
+                "This will **permanently delete every channel and every role** on this server "
+                "(except @everyone, managed roles, and roles above the bot).\n\n"
+                "Click **Delete ALL channels and roles** to proceed, or **Cancel**."
+            ),
+            color=0xE74C3C,
+        )
+        await reply(
+            interaction,
+            embed=embed,
+            view=PDResetConfirmView(interaction.user.id),
+            ephemeral=True,
+        )
+
+    @commands.command(name="pdreset")
+    @commands.guild_only()
+    async def pd_reset_prefix(self, ctx: commands.Context):
+        ok, msg = _pd_reset_allowed(ctx.author.id, ctx.guild.id if ctx.guild else None)
+        if not ok:
+            await ctx.send(msg)
+            return
+        embed = discord.Embed(
+            title="Confirm PD server wipe",
+            description=(
+                "This will **permanently delete every channel and every role** on this server.\n"
+                "Use the buttons below within 2 minutes."
+            ),
+            color=0xE74C3C,
+        )
+        await ctx.send(embed=embed, view=PDResetConfirmView(ctx.author.id))
 
 
 async def setup(bot: commands.Bot):
