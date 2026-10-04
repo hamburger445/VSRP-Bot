@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
 import discord
 
-from utils.core import load_config
+from utils.core import (
+    is_main_guild,
+    is_shift_guild,
+    load_config,
+    main_guild_id,
+    shift_guild_ids,
+)
 from utils.database import get_db
 
 log = logging.getLogger("vsrp_bot.soft_ban")
@@ -24,6 +31,14 @@ DEFAULT_UNBAN_RESTORE_ROLE_IDS = (
 DEFAULT_SOFTBAN_ACCOMPANY_ROLE_IDS = (1513915102938529802,)
 
 SOFTBAN_CASE_ACTIONS = ("softban", "ban", "modban")
+SHIFT_BANNED_ROLE_NAME = "Banned"
+SHIFT_BANNED_CHANNEL_NAME = "banned-chat"
+SHIFT_BANNED_ROLE_COLOR = 0xFF0000
+SHIFT_BAN_INFRA_STATE_KEY = "shift_ban_infra_v1"
+
+
+def soft_ban_record_guild_id() -> int:
+    return main_guild_id()
 
 
 def banned_role_id() -> int:
@@ -56,15 +71,21 @@ def _allowed_softban_role_ids(guild: discord.Guild) -> set[int]:
     banned = _banned_role(guild)
     if banned:
         allowed.add(banned.id)
-    for role_id in softban_accompany_role_ids():
-        allowed.add(role_id)
+    if is_main_guild(guild.id):
+        for role_id in softban_accompany_role_ids():
+            allowed.add(role_id)
     return allowed
 
 
 def _softban_roles(guild: discord.Guild) -> list[discord.Role]:
-    roles: list[discord.Role] = []
-    seen: set[int] = set()
-    for role_id in (banned_role_id(), *softban_accompany_role_ids()):
+    banned = _banned_role(guild)
+    if not banned:
+        return []
+    if is_shift_guild(guild.id):
+        return [banned]
+    roles: list[discord.Role] = [banned]
+    seen = {banned.id}
+    for role_id in softban_accompany_role_ids():
         role = guild.get_role(role_id)
         if role and role.id not in seen:
             seen.add(role.id)
@@ -169,23 +190,105 @@ async def deactivate_soft_ban_record(guild_id: int, user_id: int) -> None:
     db = await get_db()
     await db.execute(
         "UPDATE soft_bans SET active = 0, lifted_at = NOW() WHERE guild_id = ? AND user_id = ? AND active = 1",
-        (guild_id, user_id),
+        (soft_ban_record_guild_id(), user_id),
     )
     await db.commit()
 
 
+def _shift_banned_role_id_from_state_key(guild_id: int) -> str:
+    return f"shift_banned_role_id:{guild_id}"
+
+
+def _shift_banned_channel_id_from_state_key(guild_id: int) -> str:
+    return f"shift_banned_channel_id:{guild_id}"
+
+
+async def _get_state_id(key: str) -> int | None:
+    from utils.core import get_state
+
+    raw = await get_state(key)
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+async def _set_state_id(key: str, value: int) -> None:
+    from utils.core import set_state
+
+    await set_state(key, str(value))
+
+
 def _banned_role(guild: discord.Guild) -> discord.Role | None:
-    role_id = banned_role_id()
-    return guild.get_role(role_id) if role_id else None
+    if is_main_guild(guild.id):
+        role_id = banned_role_id()
+        return guild.get_role(role_id) if role_id else None
+    return discord.utils.get(guild.roles, name=SHIFT_BANNED_ROLE_NAME)
 
 
 async def is_soft_banned(guild_id: int, user_id: int) -> bool:
     db = await get_db()
+    record_guild = soft_ban_record_guild_id()
     row = await db.execute_fetchone(
         "SELECT 1 FROM soft_bans WHERE guild_id = ? AND user_id = ? AND active = 1",
-        (guild_id, user_id),
+        (record_guild, user_id),
     )
     return row is not None
+
+
+async def apply_soft_ban_on_shift_member(
+    member: discord.Member,
+    *,
+    reason: str = "Soft ban (main server)",
+) -> bool:
+    role = _banned_role(member.guild)
+    if not role:
+        return False
+    try:
+        await member.edit(roles=[role], reason=reason)
+        return True
+    except discord.HTTPException:
+        log.warning("Could not apply shift soft ban for %s in guild %s", member.id, member.guild.id)
+        return False
+
+
+async def sync_soft_ban_to_shift_guilds(
+    bot: discord.Client,
+    user_id: int,
+    *,
+    reason: str,
+) -> None:
+    for guild_id in shift_guild_ids():
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            continue
+        member = guild.get_member(user_id)
+        if member:
+            await apply_soft_ban_on_shift_member(member, reason=reason)
+            await setup_shift_banned_role_permissions(guild)
+
+
+async def clear_soft_ban_on_shift_guilds(
+    bot: discord.Client,
+    user_id: int,
+    *,
+    reason: str = "Ban lifted",
+) -> None:
+    for guild_id in shift_guild_ids():
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            continue
+        member = guild.get_member(user_id)
+        if not member:
+            continue
+        banned = _banned_role(guild)
+        if banned and banned in member.roles:
+            try:
+                await member.edit(roles=[], reason=reason)
+            except discord.HTTPException:
+                log.warning("Could not clear shift soft ban for %s in %s", user_id, guild_id)
 
 
 async def apply_soft_ban(
@@ -194,12 +297,17 @@ async def apply_soft_ban(
     moderator_id: int,
     case_id: int | None = None,
     reason: str = "Soft ban",
+    bot: discord.Client | None = None,
 ) -> tuple[bool, str]:
+    if not is_main_guild(member.guild.id):
+        return False, "Soft bans are issued from the main server."
+
     role = _banned_role(member.guild)
     if not role:
         return False, "Banned role is not configured or not found in this server."
 
-    if role in member.roles and await is_soft_banned(member.guild.id, member.id):
+    record_guild = soft_ban_record_guild_id()
+    if role in member.roles and await is_soft_banned(record_guild, member.id):
         return False, f"{member.mention} is already soft-banned."
 
     keep_ids = {role.id, *softban_accompany_role_ids()}
@@ -227,9 +335,13 @@ async def apply_soft_ban(
             moderator_id = EXCLUDED.moderator_id,
             lifted_at = NULL
         """,
-        (member.guild.id, member.id, json.dumps(saved), case_id, moderator_id),
+        (record_guild, member.id, json.dumps(saved), case_id, moderator_id),
     )
     await db.commit()
+
+    if bot:
+        await sync_soft_ban_to_shift_guilds(bot, member.id, reason=reason)
+
     return True, f"Soft-banned {member.mention}. They can only access the ban appeal channel."
 
 
@@ -238,22 +350,26 @@ async def remove_soft_ban(
     user_id: int,
     *,
     reason: str = "Ban lifted",
+    bot: discord.Client | None = None,
 ) -> tuple[bool, str]:
     member = guild.get_member(user_id)
     banned = _banned_role(guild)
     if not banned:
         return False, "Banned role not configured."
 
-    soft_active = await is_soft_banned(guild.id, user_id)
-    has_banned_role = member is not None and banned in member.roles
+    record_guild = soft_ban_record_guild_id()
+    soft_active = await is_soft_banned(record_guild, user_id)
+    has_banned_role = member is not None and banned and banned in member.roles
     if not soft_active and not has_banned_role:
         return False, "That user is not soft-banned."
 
     # Clear DB before changing roles so on_member_update does not re-strip them.
-    await deactivate_soft_ban_record(guild.id, user_id)
+    await deactivate_soft_ban_record(record_guild, user_id)
 
     if not member:
         await mark_pending_unban_roles(guild.id, user_id)
+        if bot:
+            await clear_soft_ban_on_shift_guilds(bot, user_id, reason=reason)
         return True, f"Soft-ban cleared for `{user_id}` (not in server; roles will restore when they rejoin)."
 
     try:
@@ -264,6 +380,8 @@ async def remove_soft_ban(
         return False, f"Failed to remove soft ban: {exc}"
 
     role_names = ", ".join(r.name for r in assigned) or "none (check hierarchy)"
+    if bot:
+        await clear_soft_ban_on_shift_guilds(bot, user_id, reason=reason)
     return True, f"Removed soft-ban from {member.mention} and assigned: {role_names}."
 
 
@@ -272,10 +390,11 @@ async def full_unban(
     user_id: int,
     *,
     reason: str = "Ban lifted",
+    bot: discord.Client | None = None,
 ) -> tuple[bool, str]:
     """Lift soft-ban or Discord hard-ban and apply standard unban roles when possible."""
-    if await is_soft_banned(guild.id, user_id):
-        ok, msg = await remove_soft_ban(guild, user_id, reason=reason)
+    if await is_soft_banned(soft_ban_record_guild_id(), user_id):
+        ok, msg = await remove_soft_ban(guild, user_id, reason=reason, bot=bot)
         return ok, msg
 
     try:
@@ -284,9 +403,9 @@ async def full_unban(
         member = guild.get_member(user_id)
         banned = _banned_role(guild)
         if member and banned and banned in member.roles:
-            return await remove_soft_ban(guild, user_id, reason=reason)
-        if await is_soft_banned(guild.id, user_id):
-            return await remove_soft_ban(guild, user_id, reason=reason)
+            return await remove_soft_ban(guild, user_id, reason=reason, bot=bot)
+        if await is_soft_banned(soft_ban_record_guild_id(), user_id):
+            return await remove_soft_ban(guild, user_id, reason=reason, bot=bot)
         return False, "That user is not soft-banned or Discord-banned."
 
     try:
@@ -294,7 +413,9 @@ async def full_unban(
     except discord.HTTPException as exc:
         return False, f"Failed to Discord-unban: {exc}"
 
-    await deactivate_soft_ban_record(guild.id, user_id)
+    await deactivate_soft_ban_record(soft_ban_record_guild_id(), user_id)
+    if bot:
+        await clear_soft_ban_on_shift_guilds(bot, user_id, reason=reason)
     member = guild.get_member(user_id)
     if member:
         try:
@@ -309,9 +430,9 @@ async def full_unban(
 
 
 async def enforce_soft_ban_on_join(member: discord.Member) -> None:
-    if await consume_pending_unban_roles(member):
+    if is_main_guild(member.guild.id) and await consume_pending_unban_roles(member):
         return
-    if not await is_soft_banned(member.guild.id, member.id):
+    if not await is_soft_banned(soft_ban_record_guild_id(), member.id):
         return
     banned = _banned_role(member.guild)
     if not banned:
@@ -328,7 +449,7 @@ async def enforce_soft_ban_on_join(member: discord.Member) -> None:
 
 async def enforce_soft_ban_roles(member: discord.Member) -> bool:
     """Strip extra roles if a soft-banned member received new ones."""
-    if not await is_soft_banned(member.guild.id, member.id):
+    if not await is_soft_banned(soft_ban_record_guild_id(), member.id):
         return False
     banned = _banned_role(member.guild)
     if not banned:
@@ -403,3 +524,103 @@ async def setup_banned_role_permissions(guild: discord.Guild) -> tuple[int, list
             log.warning("Overwrite failed for channel %s: %s", channel.id, exc)
 
     return updated, allow_ids
+
+
+async def _shift_banned_channel_id(guild: discord.Guild) -> int | None:
+    stored = await _get_state_id(_shift_banned_channel_id_from_state_key(guild.id))
+    if stored:
+        ch = guild.get_channel(stored)
+        if ch:
+            return stored
+    found = discord.utils.get(guild.text_channels, name=SHIFT_BANNED_CHANNEL_NAME)
+    return found.id if found else None
+
+
+async def setup_shift_banned_role_permissions(guild: discord.Guild) -> None:
+    role = _banned_role(guild)
+    channel_id = await _shift_banned_channel_id(guild)
+    if not role or not channel_id:
+        return
+    allow_set = {channel_id}
+    for channel in guild.channels:
+        if not isinstance(
+            channel,
+            (discord.TextChannel, discord.VoiceChannel, discord.ForumChannel, discord.StageChannel),
+        ):
+            continue
+        try:
+            if channel.id in allow_set:
+                await channel.set_permissions(
+                    role,
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True,
+                    attach_files=True,
+                    embed_links=True,
+                    reason="Shift soft ban: banned-chat only",
+                )
+            else:
+                await channel.set_permissions(
+                    role,
+                    view_channel=False,
+                    send_messages=False,
+                    read_message_history=False,
+                    reason="Shift soft ban: hide channel",
+                )
+        except discord.HTTPException as exc:
+            log.warning("Shift ban overwrite failed %s: %s", channel.id, exc)
+
+
+async def ensure_shift_ban_infrastructure(guild: discord.Guild) -> None:
+    me = guild.me
+    if not me:
+        return
+
+    role = discord.utils.get(guild.roles, name=SHIFT_BANNED_ROLE_NAME)
+    if not role:
+        try:
+            role = await guild.create_role(
+                name=SHIFT_BANNED_ROLE_NAME,
+                colour=discord.Colour(SHIFT_BANNED_ROLE_COLOR),
+                reason="WPD/FD soft-ban infrastructure",
+            )
+            await asyncio.sleep(0.2)
+        except discord.HTTPException as exc:
+            log.error("Could not create Banned role in guild %s: %s", guild.id, exc)
+            return
+    else:
+        try:
+            await role.edit(colour=discord.Colour(SHIFT_BANNED_ROLE_COLOR), reason="WPD/FD soft-ban infrastructure")
+        except discord.HTTPException:
+            pass
+
+    await _set_state_id(_shift_banned_role_id_from_state_key(guild.id), role.id)
+
+    channel = discord.utils.get(guild.text_channels, name=SHIFT_BANNED_CHANNEL_NAME)
+    if not channel:
+        try:
+            channel = await guild.create_text_channel(
+                SHIFT_BANNED_CHANNEL_NAME,
+                reason="Soft-ban appeal chat (shift server)",
+            )
+            await asyncio.sleep(0.2)
+        except discord.HTTPException as exc:
+            log.error("Could not create banned-chat in guild %s: %s", guild.id, exc)
+            return
+
+    await _set_state_id(_shift_banned_channel_id_from_state_key(guild.id), channel.id)
+    await setup_shift_banned_role_permissions(guild)
+
+
+async def provision_shift_ban_infrastructure(bot: discord.Client) -> None:
+    """One-time per deploy flag: ensure FD/PD Banned role + banned-chat channel exist."""
+    from utils.core import get_state, set_state
+
+    if await get_state(SHIFT_BAN_INFRA_STATE_KEY):
+        return
+    for guild_id in shift_guild_ids():
+        guild = bot.get_guild(guild_id)
+        if guild:
+            await ensure_shift_ban_infrastructure(guild)
+    await set_state(SHIFT_BAN_INFRA_STATE_KEY, "1")
+    log.info("Shift server soft-ban infrastructure provisioned (FD/PD).")

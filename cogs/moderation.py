@@ -18,6 +18,7 @@ from utils.soft_ban import (
     is_soft_banned,
     full_unban,
     remove_soft_ban,
+    soft_ban_record_guild_id,
     softban_notify_channel_id,
 )
 from utils.permissions import (
@@ -436,7 +437,7 @@ async def _review_appeal(interaction: discord.Interaction, appeal_id: int, *, ac
 
     if accepted:
         await db.execute("UPDATE mod_cases SET active = 0 WHERE id = ?", (case["id"],))
-        await _reverse_punishment(guild, case)
+        await _reverse_punishment(guild, case, bot=interaction.client)
     await db.commit()
 
     embed = interaction.message.embeds[0].copy() if interaction.message.embeds else discord.Embed()
@@ -478,7 +479,12 @@ def _case_is_hard_ban(case: dict) -> bool:
     return False
 
 
-async def _reverse_punishment(guild: discord.Guild, case: dict) -> None:
+async def _reverse_punishment(
+    guild: discord.Guild,
+    case: dict,
+    *,
+    bot: discord.Client | None = None,
+) -> None:
     action = case["action_type"]
     user_id = case["user_id"]
     try:
@@ -487,6 +493,7 @@ async def _reverse_punishment(guild: discord.Guild, case: dict) -> None:
                 guild,
                 user_id,
                 reason=f"Appeal accepted case #{case['id']}",
+                bot=bot,
             )
             if not ok:
                 await guild.unban(discord.Object(id=user_id), reason=f"Appeal accepted case #{case['id']}")
@@ -495,6 +502,7 @@ async def _reverse_punishment(guild: discord.Guild, case: dict) -> None:
                 guild,
                 user_id,
                 reason=f"Appeal accepted case #{case['id']}",
+                bot=bot,
             )
         elif action == "mute":
             member = guild.get_member(user_id)
@@ -613,7 +621,7 @@ async def _execute_softban(
     extra: dict | None = None,
 ) -> tuple[int | None, str]:
     proof = (evidence or reason)[:1500]
-    prior = await count_prior_softban_cases(guild.id, target.id)
+    prior = await count_prior_softban_cases(soft_ban_record_guild_id(), target.id)
     if prior >= 1:
         esc_reason = f"{reason} | Automatic hardban (second softban)"
         return await _execute_hardban(
@@ -643,6 +651,7 @@ async def _execute_softban(
         moderator_id=moderator.id,
         case_id=case_id,
         reason=f"Case #{case_id}: {reason}",
+        bot=bot,
     )
     if not ok:
         return case_id, f"Case #{case_id} created but soft ban failed: {apply_msg}"
@@ -1105,7 +1114,7 @@ class Moderation(commands.Cog):
         *,
         moderator_id: int,
     ) -> tuple[bool, str, int | None]:
-        ok, msg = await full_unban(guild, user_id, reason=reason)
+        ok, msg = await full_unban(guild, user_id, reason=reason, bot=self.bot)
         if not ok:
             return False, msg, None
         case_id = await _create_case(

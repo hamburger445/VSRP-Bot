@@ -154,6 +154,7 @@ class VSRPBot(commands.Bot):
         results = await self._sync_commands(all_guild_ids())
         if results is not None:
             log.info("Startup slash sync: %s", format_sync_summary(results).replace("**", ""))
+        self._resynced_commands = True
 
     async def _sync_commands(self, guild_ids: list[int]) -> dict[int, list[str]] | None:
         try:
@@ -189,6 +190,19 @@ class VSRPBot(commands.Bot):
         if not getattr(self, "_expiry_task_started", False):
             self._expiry_task_started = True
             self.loop.create_task(self._expiry_loop())
+
+        if not getattr(self, "_shift_ban_infra_started", False):
+            self._shift_ban_infra_started = True
+            self.loop.create_task(self._provision_shift_ban_infrastructure())
+
+    async def _provision_shift_ban_infrastructure(self) -> None:
+        from utils.soft_ban import provision_shift_ban_infrastructure
+
+        await self.wait_until_ready()
+        try:
+            await provision_shift_ban_infrastructure(self)
+        except Exception:
+            log.exception("Shift soft-ban infrastructure provisioning failed")
 
     async def _expiry_loop(self):
         from utils.users import process_expirations
