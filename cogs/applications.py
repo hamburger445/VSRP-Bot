@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import datetime, timezone
 
 import discord
@@ -10,6 +11,7 @@ from utils.applications import (
     application_departments,
     application_panel_embed,
     application_questions_for,
+    application_review_embed,
     application_submission_embed,
     application_pending_role_id,
     application_approved_role_id,
@@ -25,6 +27,8 @@ from utils.database import DatabaseError, DatabaseTimeoutError, get_db
 from utils.embeds import build_embed, build_error_embed, build_success_embed
 from utils.permissions import is_staff
 from utils.verification import is_verified_user
+
+log = logging.getLogger("vsrp_bot.applications")
 
 
 async def _has_pending_application(user_id: int, department: str = "civilian") -> bool:
@@ -78,6 +82,88 @@ async def _fetch_application_answers(application_id: int) -> list[tuple[str, str
         (application_id,),
     )
     return [(row["question"], row["answer"]) for row in rows]
+
+
+def _can_review_applications(interaction: discord.Interaction) -> bool:
+    if is_staff(interaction.user):
+        return True
+    if not interaction.guild or not isinstance(interaction.user, discord.Member):
+        return False
+    for role_id in reviewer_role_ids():
+        role = interaction.guild.get_role(role_id)
+        if role and role in interaction.user.roles:
+            return True
+    return False
+
+
+async def _fetch_discord_user(bot: commands.Bot, user_id: int) -> discord.User | None:
+    user = bot.get_user(user_id)
+    if user:
+        return user
+    try:
+        return await bot.fetch_user(user_id)
+    except discord.HTTPException:
+        return None
+
+
+async def _submission_message_note(
+    bot: commands.Bot,
+    application: dict,
+    guild: discord.Guild | None,
+) -> str:
+    channel_id = application.get("channel_id")
+    message_id = application.get("message_id")
+    if not channel_id or not message_id:
+        return "No channel message on file (use **republish** to post again if pending)."
+    link_guild = guild.id if guild else load_config().get("guild", {}).get("id")
+    link = f"https://discord.com/channels/{link_guild}/{channel_id}/{message_id}"
+    if guild:
+        channel = guild.get_channel(int(channel_id))
+        if isinstance(channel, discord.TextChannel):
+            try:
+                await channel.fetch_message(int(message_id))
+                return f"[Open submission message]({link})"
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                return f"Stored message was **deleted** or inaccessible. [Old link]({link})"
+    return f"[Submission message link]({link}) (could not verify from this server)"
+
+
+async def _republish_application(
+    bot: commands.Bot,
+    guild: discord.Guild,
+    application: dict,
+    answers: list[tuple[str, str]],
+) -> str | None:
+    """Post pending application to review channel. Returns error message or None on success."""
+    if application["status"] != "pending":
+        return "Only **pending** applications can be republished."
+
+    department = application.get("department") or "civilian"
+    channel = guild.get_channel(applications_channel_id(department))
+    if not isinstance(channel, discord.TextChannel):
+        return "The application review channel is not configured or not found."
+
+    applicant = await _fetch_discord_user(bot, int(application["user_id"]))
+    if not applicant:
+        return "Could not resolve the applicant Discord user."
+
+    embed = application_submission_embed(applicant, answers, datetime.now(timezone.utc))
+    embed.insert_field_at(
+        0,
+        name="Department",
+        value=department_label(department),
+        inline=False,
+    )
+    application_id = int(application["id"])
+    review_view = _make_review_view(application_id)
+    try:
+        message = await channel.send(embed=embed, view=review_view)
+    except discord.HTTPException:
+        return "Failed to post to the review channel (missing permissions?)."
+
+    await _update_submission_message(application_id, channel.id, message.id)
+    bot.add_view(review_view)
+    return None
 
 
 async def _collect_answers(
@@ -242,15 +328,7 @@ async def _review_application(
     if not interaction.response.is_done():
         await defer(interaction)
 
-    review_role_ids = reviewer_role_ids()
-    allowed = False
-    if interaction.guild:
-        for role_id in review_role_ids:
-            role = interaction.guild.get_role(role_id)
-            if role and role in interaction.user.roles:
-                allowed = True
-                break
-    if not allowed and not is_staff(interaction.user):
+    if not _can_review_applications(interaction):
         await reply(interaction, "You do not have permission to review applications.", ephemeral=True)
         return
 
@@ -546,6 +624,8 @@ async def _run_application_flow(
 
 
 class Applications(commands.Cog):
+    application = app_commands.Group(name="application", description="Staff application review tools")
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
@@ -612,6 +692,15 @@ class Applications(commands.Cog):
 
     async def setup_persistent_views(self):
         self.bot.add_view(ApplicationPanelView())
+        try:
+            db = await get_db()
+            pending = await db.execute_fetchall(
+                "SELECT id FROM applications WHERE status = 'pending'",
+            )
+            for row in pending:
+                self.bot.add_view(_make_review_view(int(row["id"])))
+        except (DatabaseError, DatabaseTimeoutError):
+            log.warning("Could not register pending application review views on startup")
 
     @app_commands.command(name="apply", description="Begin a department or civilian application")
     @app_commands.describe(department="Department to apply for")
@@ -630,6 +719,114 @@ class Applications(commands.Cog):
     ):
         dept_key = department.value if department else "civilian"
         await _begin_application(interaction, dept_key)
+
+    @application.command(
+        name="review",
+        description="View application details and review by ID (staff)",
+    )
+    @app_commands.describe(
+        application_id="Application ID (shown on the submission embed)",
+        republish="Repost a pending application to the review channel if the message was deleted",
+    )
+    async def application_review(
+        self,
+        interaction: discord.Interaction,
+        application_id: app_commands.Range[int, 1, 999_999_999],
+        republish: bool = False,
+    ):
+        if not _can_review_applications(interaction):
+            await reply(
+                interaction,
+                "You do not have permission to review applications.",
+                ephemeral=True,
+            )
+            return
+
+        await defer(interaction, ephemeral=True)
+
+        try:
+            application = await _fetch_application(application_id)
+        except (DatabaseError, DatabaseTimeoutError):
+            await reply(
+                interaction,
+                build_error_embed(
+                    "Database Unavailable",
+                    "The database is reconnecting. Please try again in a few seconds.",
+                    footer="WCRP Application System",
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if not application:
+            await reply(
+                interaction,
+                build_error_embed(
+                    "Not Found",
+                    f"No application with ID **{application_id}** exists.",
+                    footer="WCRP Application System",
+                ),
+                ephemeral=True,
+            )
+            return
+
+        try:
+            answers = await _fetch_application_answers(application_id)
+        except (DatabaseError, DatabaseTimeoutError):
+            await reply(
+                interaction,
+                build_error_embed(
+                    "Database Unavailable",
+                    "Could not load application answers. Please try again.",
+                    footer="WCRP Application System",
+                ),
+                ephemeral=True,
+            )
+            return
+
+        applicant = await _fetch_discord_user(self.bot, int(application["user_id"]))
+        reviewer = None
+        if application.get("reviewer_id"):
+            reviewer = await _fetch_discord_user(self.bot, int(application["reviewer_id"]))
+
+        guild = interaction.guild
+        submission_note = await _submission_message_note(self.bot, application, guild)
+        department = application.get("department") or "civilian"
+
+        embed = application_review_embed(
+            application_id=int(application["id"]),
+            status=application["status"],
+            department=department,
+            applicant=applicant,
+            applicant_user_id=int(application["user_id"]),
+            answers=answers,
+            created_at=application.get("created_at"),
+            reviewed_at=application.get("reviewed_at"),
+            review_reason=application.get("review_reason"),
+            reviewer=reviewer,
+            submission_note=submission_note,
+        )
+
+        view = _make_review_view(application_id) if application["status"] == "pending" else None
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+        if republish:
+            if not guild:
+                await interaction.followup.send(
+                    "Republish must be run from the main server.",
+                    ephemeral=True,
+                )
+                return
+            err = await _republish_application(self.bot, guild, application, answers)
+            if err:
+                await interaction.followup.send(err, ephemeral=True)
+            else:
+                channel = guild.get_channel(applications_channel_id(department))
+                mention = channel.mention if isinstance(channel, discord.TextChannel) else "the review channel"
+                await interaction.followup.send(
+                    f"Application **#{application_id}** reposted to {mention}.",
+                    ephemeral=True,
+                )
 
     @app_commands.command(name="application-status", description="View your application status by department")
     async def application_status(self, interaction: discord.Interaction):

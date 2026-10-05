@@ -21,6 +21,59 @@ def application_panel_embed() -> discord.Embed:
     )
 
 
+def application_review_embed(
+    *,
+    application_id: int,
+    status: str,
+    department: str,
+    applicant: discord.User | None,
+    applicant_user_id: int | None = None,
+    answers: list[tuple[str, str]],
+    created_at: datetime | str | None,
+    reviewed_at: datetime | str | None = None,
+    review_reason: str | None = None,
+    reviewer: discord.User | None = None,
+    submission_note: str | None = None,
+) -> discord.Embed:
+    dept_label = department_label(department)
+    embed = build_embed(
+        title=f"Application #{application_id} — {application_status_label(status)}",
+        description=f"**Department:** {dept_label}",
+        footer="WCRP Application System",
+    )
+    embed.color = application_status_color(status)
+
+    user_id = applicant.id if applicant else applicant_user_id
+    if applicant:
+        embed.add_field(name="Applicant", value=f"{applicant} ({applicant.mention})", inline=False)
+    elif user_id:
+        embed.add_field(name="Applicant", value=f"Unknown user (`{user_id}`)", inline=False)
+    embed.add_field(name="Discord ID", value=str(user_id or "Unknown"), inline=False)
+
+    if created_at:
+        embed.add_field(name="Submitted", value=_format_app_time(created_at), inline=True)
+    if reviewed_at:
+        embed.add_field(name="Reviewed", value=_format_app_time(reviewed_at), inline=True)
+    if reviewer:
+        embed.add_field(name="Reviewer", value=f"{reviewer} ({reviewer.id})", inline=False)
+    if review_reason:
+        embed.add_field(name="Review Reason", value=review_reason[:1024], inline=False)
+    if submission_note:
+        embed.add_field(name="Submission Message", value=submission_note, inline=False)
+
+    for index, (question, answer) in enumerate(answers, start=1):
+        field_name = f"Q{index}: {question}"[:256]
+        embed.add_field(name=field_name, value=(answer or "No response provided.")[:1024], inline=False)
+
+    return embed
+
+
+def _format_app_time(value: datetime | str) -> str:
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return str(value)
+
+
 def application_submission_embed(user: discord.User, answers: list[tuple[str, str]], submitted_at: datetime) -> discord.Embed:
     embed = build_embed(
         title="Civilian Application Submitted",
