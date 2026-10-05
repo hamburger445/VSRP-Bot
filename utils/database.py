@@ -12,6 +12,7 @@ log = logging.getLogger("vsrp_bot.db")
 _pool: asyncpg.Pool | None = None
 _db: "Database | None" = None
 _pool_lock = asyncio.Lock()
+_schema_initialized = False
 
 _TRANSIENT_DB_ERRORS = (
     asyncpg.ConnectionDoesNotExistError,
@@ -89,8 +90,7 @@ class Database:
                 last_exc = exc
                 if attempt == 0:
                     log.warning("Database connection lost (%s), reconnecting pool", exc)
-                    await reset_pool()
-                    db = await get_db()
+                    db = await _reconnect_pool()
                     self._pool = db._pool
                     continue
                 log.warning("Database unavailable after retry: %s", exc)
@@ -152,7 +152,7 @@ async def reset_pool() -> None:
         _db = None
 
 
-async def _create_pool() -> tuple[asyncpg.Pool, Database]:
+async def _create_pool(*, initialize_schema: bool) -> tuple[asyncpg.Pool, Database]:
     cfg = load_config().get("database", {})
     url = _normalize_url(get_database_url())
     pool = await asyncpg.create_pool(
@@ -160,22 +160,59 @@ async def _create_pool() -> tuple[asyncpg.Pool, Database]:
         min_size=cfg.get("pool_min", 1),
         max_size=cfg.get("pool_max", 3),
         command_timeout=_pool_timeout("command_timeout_seconds", 5),
-        timeout=_pool_timeout("connect_timeout_seconds", 5),
-        max_inactive_connection_lifetime=60,
+        timeout=_pool_timeout("connect_timeout_seconds", 10),
+        max_inactive_connection_lifetime=300,
         max_queries=5000,
         statement_cache_size=20,
     )
-    await init_tables(pool)
+    if initialize_schema:
+        await init_tables(pool)
+    else:
+        async with pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
     return pool, Database(pool)
 
 
+async def _reconnect_pool() -> Database:
+    """Single-flight pool recreate after a transient connection failure."""
+    global _pool, _db, _schema_initialized
+    async with _pool_lock:
+        if _db is not None and _pool is not None:
+            try:
+                async with _pool.acquire() as conn:
+                    await conn.fetchval("SELECT 1")
+                return _db
+            except _TRANSIENT_DB_ERRORS:
+                pass
+
+        old_pool = _pool
+        _pool = None
+        if old_pool is not None:
+            try:
+                await old_pool.close()
+            except Exception as exc:
+                log.warning("Error closing database pool: %s", exc)
+
+        new_pool, _ = await _create_pool(initialize_schema=not _schema_initialized)
+        _pool = new_pool
+        if _db is None:
+            _db = Database(new_pool)
+        else:
+            _db._pool = new_pool
+        if not _schema_initialized:
+            _schema_initialized = True
+        log.info("PostgreSQL pool reconnected")
+        return _db
+
+
 async def get_db() -> Database:
-    global _pool, _db
+    global _pool, _db, _schema_initialized
     if _db is not None:
         return _db
     async with _pool_lock:
         if _db is None:
-            _pool, _db = await _create_pool()
+            _pool, _db = await _create_pool(initialize_schema=True)
+            _schema_initialized = True
             log.info("PostgreSQL pool ready")
     return _db
 
@@ -192,7 +229,9 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             registration_suspended INTEGER DEFAULT 0,
             license_suspended INTEGER DEFAULT 0,
             license_expires_at TIMESTAMPTZ,
-            insurance_expires_at TIMESTAMPTZ,            verified_at TIMESTAMPTZ,            created_at TIMESTAMPTZ DEFAULT NOW()
+            insurance_expires_at TIMESTAMPTZ,
+            verified_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ DEFAULT NOW()
         )
         """,
         """
