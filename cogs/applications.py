@@ -389,7 +389,23 @@ async def _begin_application(interaction: discord.Interaction, department: str =
         )
         return
 
-    if not await is_verified_user(member):
+    await defer(interaction, ephemeral=True)
+
+    try:
+        verified = await is_verified_user(member)
+    except (DatabaseError, DatabaseTimeoutError):
+        await reply(
+            interaction,
+            build_error_embed(
+                "Database Unavailable",
+                "The database is reconnecting. Please try again in a few seconds.",
+                footer="WCRP Application System",
+            ),
+            ephemeral=True,
+        )
+        return
+
+    if not verified:
         await reply(
             interaction,
             build_error_embed(
@@ -404,7 +420,21 @@ async def _begin_application(interaction: discord.Interaction, department: str =
     if department not in application_departments():
         department = "civilian"
 
-    if await _has_pending_application(member.id, department):
+    try:
+        pending = await _has_pending_application(member.id, department)
+    except (DatabaseError, DatabaseTimeoutError):
+        await reply(
+            interaction,
+            build_error_embed(
+                "Database Unavailable",
+                "The database is reconnecting. Please try again in a few seconds.",
+                footer="WCRP Application System",
+            ),
+            ephemeral=True,
+        )
+        return
+
+    if pending:
         await reply(
             interaction,
             build_error_embed(
@@ -603,15 +633,29 @@ class Applications(commands.Cog):
 
     @app_commands.command(name="application-status", description="View your application status by department")
     async def application_status(self, interaction: discord.Interaction):
-        db = await get_db()
-        rows = await db.execute_fetchall(
-            """
-            SELECT id, status, department, created_at, reviewed_at, review_reason
-            FROM applications WHERE user_id = ?
-            ORDER BY created_at DESC LIMIT 10
-            """,
-            (interaction.user.id,),
-        )
+        await defer(interaction, ephemeral=True)
+        try:
+            db = await get_db()
+            rows = await db.execute_fetchall(
+                """
+                SELECT id, status, department, created_at, reviewed_at, review_reason
+                FROM applications WHERE user_id = ?
+                ORDER BY created_at DESC LIMIT 10
+                """,
+                (interaction.user.id,),
+            )
+        except (DatabaseError, DatabaseTimeoutError):
+            await reply(
+                interaction,
+                build_error_embed(
+                    "Database Unavailable",
+                    "The database is reconnecting. Please try again in a few seconds.",
+                    footer="WCRP Application System",
+                ),
+                ephemeral=True,
+            )
+            return
+
         if not rows:
             await reply(
                 interaction,
