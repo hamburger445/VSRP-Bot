@@ -14,7 +14,7 @@ class PDSetup(commands.Cog):
 
     @pd.command(
         name="setup",
-        description="⚠️ Wipe and fully rebuild the Wytheville PD server (destructive)",
+        description="⚠️ Wipe and rebuild the PD server from the WSP template (WPD names)",
     )
     async def pd_setup(self, interaction: discord.Interaction):
         pd_id = pd_guild_id()

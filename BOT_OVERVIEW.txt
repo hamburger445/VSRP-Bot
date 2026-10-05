@@ -20,8 +20,8 @@ When you join (main server)
 Verification & applications
 ---------------------------
 - /verify — verify your account for departments and applications.
-- /apply — start a civilian application.
-- /application-status — check your application.
+- /apply — apply for Civilian, WPD, WCSO, or WFD (separate pending per department).
+- /application-status — all applications with 🟡 pending / 🟢 accepted / 🔴 denied.
 
 
 Help
@@ -60,10 +60,11 @@ Roleplay sessions (main, staff)
 Law enforcement (LEO)
 ---------------------
 - /leo-panel — panel for LEO actions.
-- /citation — issue a citation (fine).
-- /warrant — create a warrant.
-- /removewarrant — remove by ID.
-- /warrant-check — check someone’s warrants.
+- /citation — Virginia Uniform Summons (dropdowns + multi-step form, case #, permanent record).
+- /warrant — warrant of arrest/search form (VA code, accused info, courts, case #).
+- /serve-warrant — mark warrant served (🟢 on record; no longer active).
+- /removewarrant — administratively clear active warrant (⚪ on record).
+- /warrant-check — full warrant history with 🔴 active / 🟢 served / ⚪ cleared.
 - /pager send — page a department.
 - Unpaid citations can suspend license / warrant thresholds (config).
 
@@ -127,7 +128,7 @@ Shifts (FD/PD servers)
 
 Wytheville PD (City PD server only)
 ----------------------------------
-- /pd setup — Administrator only; creates/updates WPD roles, categories, channels, and permissions (safe to run again; never wipes the server).
+- /pd setup — Administrator only; **destructive**: wipes custom channels/categories/roles (within bot limits) and rebuilds the PD server from the Wisconsin State Patrol template with WPD role/channel names and converted permissions.
 
 
 Admin & owners

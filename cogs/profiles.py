@@ -111,7 +111,7 @@ class ProfileView(discord.ui.View):
             db = await get_db()
             rows = await db.execute_fetchall(
                 """
-                SELECT id, violation, fine, issued_by, payment_status, created_at
+                SELECT id, violation, fine, issued_by, payment_status, created_at, case_number, form_json
                 FROM citation_tickets WHERE user_id = ? ORDER BY id DESC
                 """,
                 (self.target.id,),
@@ -122,14 +122,19 @@ class ProfileView(discord.ui.View):
         if not rows:
             await reply(interaction, "No tickets on record.", ephemeral=True)
             return
-        embed = discord.Embed(title=f"Tickets | {self.target.display_name}", color=0x2B2D31)
+        from utils.leo_case import format_case_number
+        from utils.leo_forms import ticket_status_emoji
+
+        embed = discord.Embed(title=f"Citations | {self.target.display_name}", color=0x2B2D31)
         for row in rows[:10]:
             officer = interaction.guild.get_member(row["issued_by"])
             officer_name = officer.display_name if officer else f"ID {row['issued_by']}"
+            case = format_case_number(row.get("case_number") or row["id"])
+            emoji = ticket_status_emoji(row.get("payment_status"))
             embed.add_field(
-                name=f"Ticket #{row['id']} | {row['payment_status'].title()}",
+                name=f"{emoji} Case #{case} | {row['payment_status'].title()}",
                 value=(
-                    f"Violation: {row['violation']}\n"
+                    f"Charge: {row['violation']}\n"
                     f"Fine: ${row['fine']:,}\n"
                     f"Issuing Officer: {officer_name}\n"
                     f"Issue Date: {format_datetime(row['created_at'])}"
@@ -161,7 +166,10 @@ class ProfileView(discord.ui.View):
         try:
             db = await get_db()
             rows = await db.execute_fetchall(
-                "SELECT id, reason, status, issued_by, active, created_at FROM warrants WHERE user_id = ? ORDER BY id DESC",
+                """
+                SELECT id, reason, status, issued_by, active, created_at, case_number
+                FROM warrants WHERE user_id = ? ORDER BY id DESC
+                """,
                 (self.target.id,),
             )
         except (DatabaseTimeoutError, DatabaseError) as exc:
@@ -170,15 +178,20 @@ class ProfileView(discord.ui.View):
         if not rows:
             await reply(interaction, "No warrants on record.", ephemeral=True)
             return
+        from utils.leo_case import format_case_number
+        from utils.leo_forms import warrant_status_emoji
+
         embed = discord.Embed(title=f"Warrants | {self.target.display_name}", color=0x2B2D31)
         for row in rows[:10]:
-            status = "Active" if row["active"] else row.get("status", "cleared").title()
+            emoji = warrant_status_emoji(int(row["active"] or 0), row.get("status"))
+            st = (row.get("status") or ("active" if row["active"] else "cleared")).title()
             officer = interaction.guild.get_member(row["issued_by"])
             officer_name = officer.display_name if officer and row["issued_by"] else "System"
+            case = format_case_number(row.get("case_number") or row["id"])
             embed.add_field(
-                name=f"Warrant #{row['id']} | {status}",
+                name=f"{emoji} Case #{case} | {st}",
                 value=(
-                    f"Reason: {row['reason']}\n"
+                    f"Summary: {row['reason']}\n"
                     f"Issuing Officer: {officer_name}\n"
                     f"Issue Date: {format_datetime(row['created_at'])}"
                 ),

@@ -530,6 +530,14 @@ async def _migrate_legacy(conn: asyncpg.Connection) -> None:
         ("applications", "reviewer_id", "BIGINT"),
         ("applications", "reviewed_at", "TIMESTAMPTZ"),
         ("applications", "review_reason", "TEXT"),
+        ("applications", "department", "TEXT DEFAULT 'civilian'"),
+        ("warrants", "form_json", "TEXT"),
+        ("warrants", "case_number", "TEXT"),
+        ("warrants", "served_at", "TIMESTAMPTZ"),
+        ("warrants", "served_by", "BIGINT"),
+        ("warrants", "serve_form_json", "TEXT"),
+        ("citation_tickets", "form_json", "TEXT"),
+        ("citation_tickets", "case_number", "TEXT"),
     ]
     for table, column, definition in column_migrations:
         table_exists = await conn.fetchval(

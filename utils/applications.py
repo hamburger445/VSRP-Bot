@@ -8,15 +8,16 @@ from utils.embeds import build_embed
 
 
 def application_panel_embed() -> discord.Embed:
+    lines = [f"• **{department_label(key)}** — `/apply` and choose `{key}`" for key in application_departments()]
     return build_embed(
-        title="Civilian Applications",
+        title="Department Applications",
         description=(
-            "Interested in joining one of our civilian organizations?\n\n"
-            "Select an application below to begin.\n\n"
-            "Applications are completed entirely through direct messages.\n"
-            "Please answer honestly and provide detailed responses."
+            "Apply for a department or civilian membership.\n\n"
+            "Use **`/apply`** and pick a department, or use the button below for the default civilian application.\n\n"
+            "Track status anytime with **`/application-status`**.\n\n"
+            + "\n".join(lines)
         ),
-        footer="WCRP Civilian Application System",
+        footer="WCRP Application System",
     )
 
 
@@ -39,8 +40,40 @@ def application_submission_embed(user: discord.User, answers: list[tuple[str, st
     return embed
 
 
-def applications_channel_id() -> int:
-    return int(load_config().get("applications", {}).get("submission_channel_id", 1513940631779807232))
+def application_departments() -> dict[str, dict]:
+    cfg = load_config().get("applications", {})
+    raw = cfg.get("departments")
+    if isinstance(raw, dict) and raw:
+        return raw
+    return {
+        "civilian": {"label": "Civilian / WCVA"},
+        "wpd": {"label": "Wytheville Police Department"},
+        "wcso": {"label": "Wythe County Sheriffs Office"},
+        "wfd": {"label": "Wythe County Fire & Rescue"},
+    }
+
+
+def department_label(department_key: str) -> str:
+    dept = application_departments().get(department_key, {})
+    return str(dept.get("label") or department_key.replace("_", " ").title())
+
+
+def applications_channel_id(department: str = "civilian") -> int:
+    cfg = load_config().get("applications", {})
+    dept_cfg = application_departments().get(department, {})
+    if dept_cfg.get("submission_channel_id"):
+        return int(dept_cfg["submission_channel_id"])
+    return int(cfg.get("submission_channel_id", 1513940631779807232))
+
+
+def application_questions_for(department: str) -> list[dict[str, str | list[str]]]:
+    dept_cfg = application_departments().get(department, {})
+    questions = dept_cfg.get("questions")
+    if questions and isinstance(questions, list):
+        if questions and isinstance(questions[0], dict):
+            return questions
+        return [{"question": str(q), "type": "text"} for q in questions]
+    return application_questions()
 
 
 def applications_panel_channel_id() -> int | None:

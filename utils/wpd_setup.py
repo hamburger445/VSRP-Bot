@@ -1,9 +1,10 @@
-"""Destructive full rebuild of the Wytheville Police Department Discord server (/pd setup)."""
+"""Destructive WPD rebuild from the Wisconsin State Patrol server template (/pd setup)."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -74,82 +75,64 @@ INFO_VIEWERS = (
 ) + SWORN
 DEPT_COMMUNITY = INFO_VIEWERS
 
-WPD_CATEGORIES: list[tuple[str, list[tuple[str, ChannelKind, str]]]] = [
-    (
-        "INFORMATION",
-        [
-            ("welcome", "text", "info_readonly"),
-            ("rules", "text", "info_readonly"),
-            ("announcements", "text", "info_readonly"),
-            ("department-information", "text", "info_readonly"),
-            ("department-directory", "text", "info_readonly"),
-            ("faq", "text", "info_readonly"),
-        ],
-    ),
-    ("COMMUNITY", [("general", "text", "community_general")]),
-    (
-        "RECRUITMENT",
-        [
-            ("application-information", "text", "recruit_info_readonly"),
-            ("applications", "text", "applications_readonly"),
-            ("application-status", "text", "application_status_readonly"),
-            ("recruitment-chat", "text", "recruit_chat_comm"),
-        ],
-    ),
-    (
-        "PATROL DIVISION",
-        [
-            ("patrol-information", "text", "patrol_info_readonly"),
-            ("patrol-briefings", "text", "patrol_briefings_readonly"),
-            ("patrol-chat", "text", "patrol_chat_comm"),
-        ],
-    ),
-    (
-        "SPECIAL OPERATIONS",
-        [
-            ("traffic-unit", "text", "unit_traffic"),
-            ("criminal-investigations", "text", "unit_cid"),
-            ("k9-unit", "text", "unit_k9"),
-            ("swat-special-operations", "text", "unit_swat"),
-        ],
-    ),
-    (
-        "SUPERVISION",
-        [
-            ("supervisor-chat", "text", "supervision_chat_comm"),
-            ("officer-evaluations", "text", "supervision_personnel_admin"),
-            ("disciplinary-actions", "text", "supervision_personnel_admin"),
-            ("leave-requests", "text", "supervision_personnel_admin"),
-            ("promotion-recommendations", "text", "supervision_personnel_admin"),
-        ],
-    ),
-    (
-        "INTERNAL AFFAIRS",
-        [
-            ("ia-information", "text", "ia_info_readonly"),
-            ("complaints", "text", "ia_comm"),
-            ("ia-cases", "text", "ia_comm"),
-            ("investigations", "text", "ia_comm"),
-        ],
-    ),
-    (
-        "COMMAND",
-        [
-            ("command-chat", "text", "command_chat_comm"),
-            ("command-decisions", "text", "command_admin_comm"),
-            ("department-management", "text", "command_admin_comm"),
-            ("personnel-discussions", "text", "personnel_comm"),
-        ],
-    ),
-    (
-        "VOICE",
-        [
-            ("Lobby", "voice", "voice_lobby"),
-            ("Training", "voice", "voice_training"),
-            ("Command", "voice", "voice_command"),
-            ("AFK", "voice", "voice_afk"),
-        ],
-    ),
+# WSP → WPD role access groups (same access concept, WPD role names only).
+DAS_STAFF = SUPERVISION_PERSONNEL + ("Internal Affairs",)
+DMR_ACCESS = ("Department Support", "Patrol Division") + COMMAND
+ACADEMY_STAFF = ("Training Division", "Field Training Officer") + COMMAND
+
+# Wisconsin State Patrol layout → Wytheville Police Department names.
+# Order matches the WSP reference channel list exactly.
+# (category_name, channel_name, kind, permission_template)
+WPD_SERVER_LAYOUT: list[tuple[str, str, ChannelKind, str]] = [
+    ("IMPORTANT", "front-desk", "text", "wsp_important_readonly"),
+    ("IMPORTANT", "pr-announcements", "text", "wsp_important_readonly"),
+    ("IMPORTANT", "general", "text", "wsp_public_comm"),
+    ("IMPORTANT", "bot-commands", "text", "wsp_public_comm"),
+    ("POLICE CADET PROGRAM", "cadet-information", "text", "wsp_cadet_info"),
+    ("COMMUNICATIONS", "communications", "text", "wsp_public_comm"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "hr-announcements", "text", "wsp_hr_announce"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "hr-discussions", "text", "wsp_hr_discuss"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "command", "text", "wsp_command_room"),
+    ("DIVISION OF STANDARDS & TRAINING", "wpd-academy-information", "text", "wsp_academy_info"),
+    ("DIVISION OF STANDARDS & TRAINING", "wpd-academy-discussions", "text", "wsp_academy_comm"),
+    ("DIVISION OF STANDARDS & TRAINING", "wpd-academy-cadet-announcements", "text", "wsp_academy_info"),
+    ("DIVISION OF STANDARDS & TRAINING", "wpd-academy-adjustments", "text", "wsp_academy_staff"),
+    ("DIVISION OF STANDARDS & TRAINING", "wpd-academy-test", "text", "wsp_academy_staff"),
+    ("DIVISION OF STANDARDS & TRAINING", "wpd-academy-welcome", "text", "wsp_academy_info"),
+    ("DIVISION OF STANDARDS & TRAINING", "wpd-academy-announcements", "text", "wsp_academy_info"),
+    ("DIVISION OF STANDARDS & TRAINING", "wpd-academy-gallery", "text", "wsp_academy_comm"),
+    ("ARCHIVED", "archived-dmr-information", "text", "wsp_archived"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "approval", "text", "wsp_hr_admin"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "loa", "text", "wsp_hr_admin"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "citation", "text", "wsp_hr_records"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "arrest", "text", "wsp_hr_records"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "warrant", "text", "wsp_hr_records"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "hr-information", "text", "wsp_hr_announce"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "hr-training", "text", "wsp_hr_discuss"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "hr-logs", "text", "wsp_hr_log"),
+    ("DIVISION OF STANDARDS & TRAINING", "extra-training", "text", "wsp_academy_comm"),
+    ("DIVISION OF STANDARDS & TRAINING", "cadet-login", "text", "wsp_academy_staff"),
+    ("DIVISION OF MEDIA RELATIONS", "dmr-admission", "text", "wsp_dmr_comm"),
+    ("DIVISION OF MEDIA RELATIONS", "dmr-chat", "text", "wsp_dmr_comm"),
+    ("PATROL DIVISION", "incident-reports", "text", "wsp_patrol_comm"),
+    ("PATROL DIVISION", "shift-logs", "text", "wsp_patrol_log"),
+    ("APPLICATIONS & APPROVALS", "leave-approvals", "text", "wsp_hr_admin"),
+    ("DIVISION OF MEDIA RELATIONS", "dmr-logs", "text", "wsp_dmr_log"),
+    ("DIVISION OF MEDIA RELATIONS", "dmr-announcements", "text", "wsp_dmr_announce"),
+    ("LOGGING", "logging-applications", "text", "wsp_log_channel"),
+    ("LOGGING", "mod-logs", "text", "wsp_log_channel"),
+    ("LOGGING", "w-logs", "text", "wsp_log_channel"),
+    ("VOICE", "Training Voice", "voice", "wsp_voice_training"),
+    ("VOICE", "Lounge", "voice", "wsp_voice_lounge"),
+    ("DIVISION OF STANDARDS & TRAINING", "training-requests", "text", "wsp_academy_comm"),
+    ("APPLICATIONS & APPROVALS", "wpd-applications", "text", "wsp_applications"),
+    ("LOGGING", "ticket-notifications", "text", "wsp_log_channel"),
+    ("LOGGING", "desk-logs", "text", "wsp_log_channel"),
+    ("DIVISION OF STANDARDS & TRAINING", "pursuit-trainings", "text", "wsp_academy_comm"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "administrative-leave-chat", "text", "wsp_hr_admin"),
+    ("DIVISION OF ADMINISTRATIVE SERVICES", "hr-commands", "text", "wsp_hr_admin"),
+    ("LOGGING", "cadet-academy-logs", "text", "wsp_log_channel"),
+    ("LOGGING", "academy-logs", "text", "wsp_log_channel"),
 ]
 
 # --- Explicit channel permission presets ---
@@ -240,6 +223,27 @@ def _text_comm_supervisor() -> discord.PermissionOverwrite:
 
 def _text_comm_command() -> discord.PermissionOverwrite:
     return _text_comm_supervisor()
+
+
+def _text_log_view() -> discord.PermissionOverwrite:
+    return discord.PermissionOverwrite(
+        view_channel=True,
+        read_message_history=True,
+        send_messages=False,
+        add_reactions=False,
+        use_external_emojis=False,
+        use_external_stickers=False,
+        use_application_commands=False,
+        embed_links=False,
+        attach_files=False,
+        create_public_threads=False,
+        create_private_threads=False,
+        send_messages_in_threads=False,
+        manage_messages=False,
+        manage_threads=False,
+        mention_everyone=False,
+        manage_webhooks=False,
+    )
 
 
 def _text_bot_service() -> discord.PermissionOverwrite:
@@ -425,8 +429,8 @@ class SetupReport:
         embed = discord.Embed(
             title="Wytheville Police Department Rebuild Complete",
             description=(
-                "The PD server was wiped and rebuilt from the WPD template. "
-                "@everyone and roles above the bot were preserved where required."
+                "The PD server was wiped and rebuilt from the **WSP server template** "
+                "(Wytheville terminology). @everyone and roles above the bot were preserved where required."
             ),
             color=color,
         )
@@ -508,66 +512,67 @@ def _build_overwrites(
 ) -> dict[discord.abc.Snowflake, discord.PermissionOverwrite]:
     ow: dict[discord.abc.Snowflake, discord.PermissionOverwrite] = {guild.default_role: DENY}
 
-    if template == "info_readonly":
-        _readonly_plus_staff(ow, rmap, viewers=INFO_VIEWERS, staff=INFO_STAFF)
-    elif template == "recruit_info_readonly":
-        _readonly_plus_staff(ow, rmap, viewers=ACADEMY_VIEWERS, staff=RECRUITMENT_STAFF)
-    elif template == "applications_readonly":
-        _readonly_plus_staff(ow, rmap, viewers=("Cadet", "Civilian"), staff=RECRUITMENT_STAFF)
-        _add_bot_post(ow, rmap)
-    elif template == "application_status_readonly":
-        _readonly_plus_staff(ow, rmap, viewers=("Cadet", "Civilian"), staff=RECRUITMENT_STAFF)
-        _add_bot_post(ow, rmap)
-    elif template == "patrol_info_readonly":
-        _readonly_plus_staff(ow, rmap, viewers=PATROL_ACCESS, staff=SUPERVISION)
-    elif template == "patrol_briefings_readonly":
-        _readonly_plus_staff(ow, rmap, viewers=PATROL_ACCESS, staff=SUPERVISION)
-    elif template == "ia_info_readonly":
-        _readonly_plus_staff(ow, rmap, viewers=IA_ACCESS, staff=("Chief of Police", "Deputy Chief"))
-    elif template == "community_general":
+    if template == "wsp_important_readonly":
+        _readonly_plus_staff(ow, rmap, viewers=DEPT_COMMUNITY, staff=SUPERVISION)
+    elif template == "wsp_public_comm":
         _add_roles(ow, rmap, DEPT_COMMUNITY, _text_comm_member())
-    elif template == "recruit_chat_comm":
-        _add_roles(ow, rmap, RECRUITMENT_STAFF + ("Cadet", "Municipal PD Academy"), _text_comm_member())
-    elif template == "patrol_chat_comm":
-        _add_roles(ow, rmap, PATROL_ACCESS, _text_comm_member())
-        _add_roles(ow, rmap, SUPERVISION, _text_comm_supervisor())
-    elif template == "unit_traffic":
-        _add_roles(ow, rmap, ("Traffic Unit",), _text_comm_member())
-        _add_roles(ow, rmap, COMMAND, _text_comm_command())
-    elif template == "unit_cid":
-        _add_roles(ow, rmap, ("Criminal Investigations Division",), _text_comm_member())
-        _add_roles(ow, rmap, COMMAND, _text_comm_command())
-    elif template == "unit_k9":
-        _add_roles(ow, rmap, ("K-9 Unit",), _text_comm_member())
-        _add_roles(ow, rmap, COMMAND, _text_comm_command())
-    elif template == "unit_swat":
-        _add_roles(ow, rmap, ("SWAT / Special Operations",), _text_comm_member())
-        _add_roles(ow, rmap, COMMAND, _text_comm_command())
-    elif template == "supervision_chat_comm":
-        _add_roles(ow, rmap, SUPERVISION + ("Training Division",), _text_comm_supervisor())
-    elif template == "supervision_personnel_admin":
-        _add_roles(ow, rmap, SUPERVISION_PERSONNEL, _text_comm_supervisor())
-    elif template == "ia_comm":
-        _add_roles(ow, rmap, IA_ACCESS, _text_comm_member())
-    elif template == "command_chat_comm":
+        _add_bot_post(ow, rmap)
+    elif template == "wsp_cadet_info":
+        _readonly_plus_staff(ow, rmap, viewers=ACADEMY_VIEWERS, staff=RECRUITMENT_STAFF)
+    elif template == "wsp_hr_announce":
+        _readonly_plus_staff(ow, rmap, viewers=DEPT_COMMUNITY, staff=DAS_STAFF)
+    elif template == "wsp_hr_discuss":
+        _add_roles(ow, rmap, DAS_STAFF, _text_comm_supervisor())
+    elif template == "wsp_command_room":
         _add_roles(ow, rmap, COMMAND, _text_comm_member())
-    elif template == "command_admin_comm":
-        _add_roles(ow, rmap, COMMAND, _text_comm_supervisor())
-    elif template == "personnel_comm":
-        _add_roles(ow, rmap, COMMAND + ("Internal Affairs",), _text_comm_supervisor())
-    elif template == "voice_lobby":
+    elif template == "wsp_academy_info":
+        _readonly_plus_staff(ow, rmap, viewers=ACADEMY_VIEWERS, staff=ACADEMY_STAFF)
+    elif template == "wsp_academy_comm":
         _add_roles(
             ow,
             rmap,
-            SWORN + ("Cadet", "Municipal PD Academy", "Department Support"),
-            _voice_member(),
+            ("Cadet", "Municipal PD Academy", "Training Division", "Field Training Officer") + COMMAND,
+            _text_comm_member(),
         )
-    elif template == "voice_training":
+    elif template == "wsp_academy_staff":
+        _add_roles(ow, rmap, ACADEMY_STAFF, _text_comm_supervisor())
+    elif template == "wsp_archived":
+        _add_roles(ow, rmap, COMMAND, _text_readonly_member())
+        _add_roles(ow, rmap, ("Deputy Chief",), _text_staff_maintain())
+    elif template == "wsp_hr_admin":
+        _add_roles(ow, rmap, DAS_STAFF, _text_comm_supervisor())
+    elif template == "wsp_hr_records":
+        _add_roles(ow, rmap, DAS_STAFF, _text_comm_supervisor())
+        _add_roles(ow, rmap, ("Internal Affairs",), _text_comm_member())
+    elif template == "wsp_hr_log":
+        _add_roles(ow, rmap, DAS_STAFF, _text_log_view())
+        _add_roles(ow, rmap, COMMAND, _text_comm_supervisor())
+        _add_bot_post(ow, rmap)
+    elif template == "wsp_dmr_comm":
+        _add_roles(ow, rmap, DMR_ACCESS, _text_comm_member())
+    elif template == "wsp_dmr_log":
+        _add_roles(ow, rmap, DMR_ACCESS, _text_log_view())
+        _add_roles(ow, rmap, COMMAND, _text_comm_supervisor())
+        _add_bot_post(ow, rmap)
+    elif template == "wsp_dmr_announce":
+        _readonly_plus_staff(ow, rmap, viewers=DMR_ACCESS, staff=COMMAND)
+    elif template == "wsp_patrol_comm":
+        _add_roles(ow, rmap, PATROL_ACCESS, _text_comm_member())
+        _add_roles(ow, rmap, SUPERVISION, _text_comm_supervisor())
+    elif template == "wsp_patrol_log":
+        _add_roles(ow, rmap, PATROL_ACCESS, _text_log_view())
+        _add_roles(ow, rmap, SUPERVISION, _text_comm_supervisor())
+        _add_bot_post(ow, rmap)
+    elif template == "wsp_applications":
+        _readonly_plus_staff(ow, rmap, viewers=("Cadet", "Civilian"), staff=RECRUITMENT_STAFF)
+        _add_bot_post(ow, rmap)
+    elif template == "wsp_log_channel":
+        _add_roles(ow, rmap, COMMAND, _text_log_view())
+        _add_bot_post(ow, rmap)
+    elif template == "wsp_voice_lounge":
+        _add_roles(ow, rmap, DEPT_COMMUNITY, _voice_member())
+    elif template == "wsp_voice_training":
         _add_roles(ow, rmap, TRAINING_VOICE, _voice_training())
-    elif template == "voice_command":
-        _add_roles(ow, rmap, COMMAND, _voice_command())
-    elif template == "voice_afk":
-        ow[guild.default_role] = _voice_afk()
     else:
         ow[guild.default_role] = _text_readonly_member()
 
@@ -739,12 +744,12 @@ async def _create_wpd_channel(
 
 
 async def _configure_afk_channel(guild: discord.Guild, report: SetupReport) -> None:
-    afk = discord.utils.get(guild.voice_channels, name="AFK")
-    if not afk:
-        report.errors.append("AFK voice channel was not found after rebuild.")
+    lounge = discord.utils.get(guild.voice_channels, name="Lounge")
+    if not lounge:
+        report.errors.append("Lounge voice channel was not found after rebuild.")
         return
     try:
-        await guild.edit(afk_channel=afk, afk_timeout=300, reason="WPD setup")
+        await guild.edit(afk_channel=lounge, afk_timeout=300, reason="WPD setup")
         report.afk_configured = True
     except discord.HTTPException as exc:
         report.errors.append(f"Could not set server AFK channel: {exc}")
@@ -765,22 +770,34 @@ async def run_wpd_setup(guild: discord.Guild) -> SetupReport:
 
     await _reorder_roles(guild, rmap, report)
 
-    for cat_index, (cat_name, channels) in enumerate(WPD_CATEGORIES):
-        category = await _create_wpd_category(guild, cat_name, cat_index, report)
+    categories: dict[str, discord.CategoryChannel] = {}
+    channel_positions: dict[str, int] = defaultdict(int)
+    next_category_pos = 0
+
+    for cat_name, ch_name, ch_kind, template in WPD_SERVER_LAYOUT:
+        if cat_name not in categories:
+            category = await _create_wpd_category(guild, cat_name, next_category_pos, report)
+            next_category_pos += 1
+            if not category:
+                continue
+            categories[cat_name] = category
+
+        category = categories.get(cat_name)
         if not category:
             continue
 
-        for ch_index, (ch_name, ch_kind, template) in enumerate(channels):
-            await _create_wpd_channel(
-                guild,
-                category,
-                ch_name,
-                ch_kind,
-                ch_index,
-                rmap,
-                template,
-                report,
-            )
+        pos = channel_positions[cat_name]
+        channel_positions[cat_name] += 1
+        await _create_wpd_channel(
+            guild,
+            category,
+            ch_name,
+            ch_kind,
+            pos,
+            rmap,
+            template,
+            report,
+        )
 
     await _configure_afk_channel(guild, report)
 

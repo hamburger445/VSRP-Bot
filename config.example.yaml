@@ -184,6 +184,16 @@ verification:
 applications:
   submission_channel_id: 1513940631779807232
   panel_channel_id: 1513916429089509496
+  departments:
+    civilian:
+      label: "Civilian / WCVA"
+    wpd:
+      label: "Wytheville Police Department"
+      # submission_channel_id: 0  # optional; uses submission_channel_id above if omitted
+    wcso:
+      label: "Wythe County Sheriffs Office"
+    wfd:
+      label: "Wythe County Fire & Rescue"
   reviewer_role_id: 1513623576694100020
   reviewer_role_ids:
     - 1279634474333634635

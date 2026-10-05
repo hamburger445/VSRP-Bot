@@ -7,8 +7,9 @@ from discord.ext import commands
 
 from utils.applications import (
     application_confirm_embed,
+    application_departments,
     application_panel_embed,
-    application_questions,
+    application_questions_for,
     application_submission_embed,
     application_pending_role_id,
     application_approved_role_id,
@@ -16,6 +17,7 @@ from utils.applications import (
     application_status_label,
     applications_channel_id,
     applications_panel_channel_id,
+    department_label,
     reviewer_role_ids,
 )
 from utils.core import defer, reply, load_config, get_state, set_state
@@ -25,20 +27,20 @@ from utils.permissions import is_staff
 from utils.verification import is_verified_user
 
 
-async def _has_pending_application(user_id: int) -> bool:
+async def _has_pending_application(user_id: int, department: str = "civilian") -> bool:
     db = await get_db()
     row = await db.execute_fetchone(
-        "SELECT id FROM applications WHERE user_id = ? AND status = 'pending'",
-        (user_id,),
+        "SELECT id FROM applications WHERE user_id = ? AND department = ? AND status = 'pending'",
+        (user_id, department),
     )
     return bool(row)
 
 
-async def _save_application(user_id: int, answers: list[tuple[str, str]]) -> int:
+async def _save_application(user_id: int, answers: list[tuple[str, str]], department: str) -> int:
     db = await get_db()
     row = await db.execute_fetchone(
-        "INSERT INTO applications (user_id, status) VALUES (?, 'pending') RETURNING id",
-        (user_id,),
+        "INSERT INTO applications (user_id, status, department) VALUES (?, 'pending', ?) RETURNING id",
+        (user_id, department),
     )
     if not row:
         raise DatabaseError("Failed to create application record")
@@ -78,8 +80,12 @@ async def _fetch_application_answers(application_id: int) -> list[tuple[str, str
     return [(row["question"], row["answer"]) for row in rows]
 
 
-async def _collect_answers(bot: commands.Bot, user: discord.User) -> list[tuple[str, str]] | None:
-    questions = application_questions()
+async def _collect_answers(
+    bot: commands.Bot,
+    user: discord.User,
+    department: str,
+) -> list[tuple[str, str]] | None:
+    questions = application_questions_for(department)
     answers: list[tuple[str, str]] = []
 
     def check_message(message: discord.Message) -> bool:
@@ -357,7 +363,7 @@ class ApplicationPanelView(discord.ui.View):
         self.add_item(ApplicationStartButton())
 
 
-async def _begin_application(interaction: discord.Interaction) -> None:
+async def _begin_application(interaction: discord.Interaction, department: str = "civilian") -> None:
     member = interaction.user
     if not isinstance(member, discord.Member):
         await reply(
@@ -395,13 +401,16 @@ async def _begin_application(interaction: discord.Interaction) -> None:
         )
         return
 
-    if await _has_pending_application(member.id):
+    if department not in application_departments():
+        department = "civilian"
+
+    if await _has_pending_application(member.id, department):
         await reply(
             interaction,
             build_error_embed(
                 "Application Pending",
-                "You already have a pending application. Please wait for staff to review it.",
-                footer="WCRP Civilian Application System",
+                f"You already have a pending **{department_label(department)}** application.",
+                footer="WCRP Application System",
             ),
             ephemeral=True,
         )
@@ -410,11 +419,11 @@ async def _begin_application(interaction: discord.Interaction) -> None:
     try:
         await member.send(
             embed=build_embed(
-                title="Civilian Application Started",
+                title=f"{department_label(department)} Application Started",
                 description=(
                     "I have sent you the application questions in DMs. Answer them in order to submit your application."
                 ),
-                footer="WCRP Civilian Application System",
+                footer="WCRP Application System",
             )
         )
     except discord.Forbidden:
@@ -435,16 +444,23 @@ async def _begin_application(interaction: discord.Interaction) -> None:
         ephemeral=True,
     )
 
-    interaction.client.loop.create_task(_run_application_flow(interaction.client, member, interaction.guild))
+    interaction.client.loop.create_task(
+        _run_application_flow(interaction.client, member, interaction.guild, department)
+    )
 
 
-async def _run_application_flow(bot: commands.Bot, member: discord.Member, guild: discord.Guild) -> None:
-    answers = await _collect_answers(bot, member)
+async def _run_application_flow(
+    bot: commands.Bot,
+    member: discord.Member,
+    guild: discord.Guild,
+    department: str,
+) -> None:
+    answers = await _collect_answers(bot, member, department)
     if not answers:
         return
 
     try:
-        application_id = await _save_application(member.id, answers)
+        application_id = await _save_application(member.id, answers, department)
     except DatabaseError:
         await member.send(
             embed=build_error_embed(
@@ -455,7 +471,7 @@ async def _run_application_flow(bot: commands.Bot, member: discord.Member, guild
         )
         return
 
-    submission_channel_id = applications_channel_id()
+    submission_channel_id = applications_channel_id(department)
     channel = guild.get_channel(submission_channel_id)
     if not isinstance(channel, discord.TextChannel):
         await member.send(
@@ -468,6 +484,12 @@ async def _run_application_flow(bot: commands.Bot, member: discord.Member, guild
         return
 
     embed = application_submission_embed(member, answers, datetime.now(timezone.utc))
+    embed.insert_field_at(
+        0,
+        name="Department",
+        value=department_label(department),
+        inline=False,
+    )
     review_view = _make_review_view(application_id)
     try:
         message = await channel.send(embed=embed, view=review_view)
@@ -561,61 +583,66 @@ class Applications(commands.Cog):
     async def setup_persistent_views(self):
         self.bot.add_view(ApplicationPanelView())
 
-    @app_commands.command(name="apply", description="Begin the civilian application process.")
-    async def apply(self, interaction: discord.Interaction):
-        await _begin_application(interaction)
+    @app_commands.command(name="apply", description="Begin a department or civilian application")
+    @app_commands.describe(department="Department to apply for")
+    @app_commands.choices(
+        department=[
+            app_commands.Choice(name="Civilian / WCVA", value="civilian"),
+            app_commands.Choice(name="Wytheville Police Department", value="wpd"),
+            app_commands.Choice(name="Wythe County Sheriffs Office", value="wcso"),
+            app_commands.Choice(name="Wythe County Fire & Rescue", value="wfd"),
+        ]
+    )
+    async def apply(
+        self,
+        interaction: discord.Interaction,
+        department: app_commands.Choice[str] | None = None,
+    ):
+        dept_key = department.value if department else "civilian"
+        await _begin_application(interaction, dept_key)
 
-    @app_commands.command(name="application-status", description="View your current application status.")
+    @app_commands.command(name="application-status", description="View your application status by department")
     async def application_status(self, interaction: discord.Interaction):
-        if await _has_pending_application(interaction.user.id):
-            await reply(
-                interaction,
-                build_embed(
-                    title="Application Status",
-                    description="You currently have a pending application under review.",
-                    footer="WCRP Civilian Application System",
-                ),
-                ephemeral=True,
-            )
-            return
-
         db = await get_db()
-        row = await db.execute_fetchone(
-            "SELECT * FROM applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+        rows = await db.execute_fetchall(
+            """
+            SELECT id, status, department, created_at, reviewed_at, review_reason
+            FROM applications WHERE user_id = ?
+            ORDER BY created_at DESC LIMIT 10
+            """,
             (interaction.user.id,),
         )
-        if not row:
+        if not rows:
             await reply(
                 interaction,
                 build_embed(
                     title="Application Status",
-                    description="You do not have any submitted applications.",
-                    footer="WCRP Civilian Application System",
+                    description="You do not have any submitted applications. Use `/apply` to start one.",
+                    footer="WCRP Application System",
                 ),
                 ephemeral=True,
             )
             return
+
+        pending = [r for r in rows if r["status"] == "pending"]
+        lines = []
+        for row in rows:
+            dept = department_label(row.get("department") or "civilian")
+            emoji = {"pending": "🟡", "accepted": "🟢", "denied": "🔴"}.get(row["status"], "⚪")
+            lines.append(
+                f"{emoji} **{dept}** — {application_status_label(row['status'])} "
+                f"(#{row['id']}, {row['created_at']})"
+            )
+        desc = "\n".join(lines)
+        if pending:
+            desc = f"You have **{len(pending)}** pending application(s).\n\n" + desc
 
         embed = build_embed(
             title="Application Status",
-            description=(
-                f"Your most recent application is **{application_status_label(row['status'])}**."
-            ),
-            footer="WCRP Civilian Application System",
+            description=desc,
+            footer="WCRP Application System",
         )
-        if row.get("reviewed_at"):
-            embed.add_field(
-                name="Reviewed At",
-                value=row["reviewed_at"].strftime("%Y-%m-%d %H:%M UTC"),
-                inline=False,
-            )
-        if row.get("reviewer_id"):
-            embed.add_field(
-                name="Reviewed By",
-                value=f"<@{row['reviewer_id']}>",
-                inline=False,
-            )
-        await reply(interaction, embed, ephemeral=True)
+        await reply(interaction, embed=embed, ephemeral=True)
 
     # Panel command removed — applications panel is auto-posted on startup.
 
