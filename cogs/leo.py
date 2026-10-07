@@ -421,6 +421,10 @@ class LawEnforcement(commands.Cog):
         department=[
             app_commands.Choice(name="Wytheville Fire & Rescue", value="fire1"),
             app_commands.Choice(name="Rural Retreat Volunteer Fire Department", value="fire2"),
+            app_commands.Choice(
+                name="Max Meadows Volunteer Fire Department",
+                value="fire3",
+            ),
             app_commands.Choice(name="Wythe County Sheriffs Office", value="police1"),
             app_commands.Choice(name="Wytheville Police Department", value="police2"),
             app_commands.Choice(name="EMS", value="ems"),

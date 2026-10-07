@@ -51,6 +51,7 @@ roles:
   departments:
     fire1: 1244720312101109761
     fire2: 1244719857581424660
+    fire3: 0
     police1: 1244720480011812977
     police2: 1244720384457052262
     ems: 1244719576206282805
@@ -59,6 +60,7 @@ roles:
   department_names:
     fire1: Wytheville Fire & Rescue
     fire2: Rural Retreat Volunteer Fire Department
+    fire3: Max Meadows Volunteer Fire Department
     police1: Wythe County Sheriffs Office
     police2: Wytheville Police Department
 
@@ -305,25 +307,25 @@ info_panel:
 
 department_pings:
   events:
-fire_spawn:
-  label: "FD Emergency Call"
-  departments: [fire1, fire2]
-  message: "An emergency call has been received requesting fire department assistance. Fire personnel are requested to respond and handle the incident as appropriate."
+    fire_spawn:
+      label: "FD Emergency Call"
+      departments: [fire1, fire2, fire3]
+      message: "An emergency call has been received requesting fire department assistance. Fire personnel are requested to respond and handle the incident as appropriate."
 
-robbery:
-  label: "PD Emergency Call"
-  departments: [police1, police2]
-  message: "An emergency call has been received requesting law enforcement assistance. Police units are requested to respond and handle the incident as appropriate."
+    robbery:
+      label: "PD Emergency Call"
+      departments: [police1, police2]
+      message: "An emergency call has been received requesting law enforcement assistance. Police units are requested to respond and handle the incident as appropriate."
 
-medical:
-  label: "Medical Emergency"
-  departments: [ems]
-  message: "A medical emergency has been reported. EMS personnel are requested to respond, assess the patient, and provide the appropriate level of care."
+    medical:
+      label: "Medical Emergency"
+      departments: [ems]
+      message: "A medical emergency has been reported. EMS personnel are requested to respond, assess the patient, and provide the appropriate level of care."
 
-traffic:
-  label: "Traffic Incident"
-  departments: [dot]
-  message: "A traffic incident has been reported. DOT personnel are requested to respond and assist with traffic control, roadway hazards, and scene management as needed."
+    traffic:
+      label: "Traffic Incident"
+      departments: [dot]
+      message: "A traffic incident has been reported. DOT personnel are requested to respond and assist with traffic control, roadway hazards, and scene management as needed."
 
 reaction_roles:
   default_roles: []

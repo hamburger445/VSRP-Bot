@@ -16,6 +16,7 @@ log = logging.getLogger("vsrp_bot.helpers")
 _DEFAULT_NAMES = {
     "fire1": "Wytheville Fire & Rescue",
     "fire2": "Rural Retreat Volunteer Fire Department",
+    "fire3": "Max Meadows Volunteer Fire Department",
     "police1": "Wythe County Sheriffs Office",
     "police2": "Wytheville Police Department",
     "ems": "EMS",
