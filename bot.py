@@ -179,13 +179,9 @@ class VSRPBot(commands.Bot):
 
         log.info("Logged in as %s (%s)", self.user, self.user.id)
 
-        from utils.permissions import load_guild_permissions
-
-        for gid in all_guild_ids():
-            try:
-                await load_guild_permissions(gid)
-            except Exception:
-                log.exception("Failed to preload permissions for guild %s", gid)
+        if not getattr(self, "_perms_preload_started", False):
+            self._perms_preload_started = True
+            self.loop.create_task(self._preload_permissions())
 
         if not getattr(self, "_expiry_task_started", False):
             self._expiry_task_started = True
@@ -194,6 +190,17 @@ class VSRPBot(commands.Bot):
         if not getattr(self, "_shift_ban_infra_started", False):
             self._shift_ban_infra_started = True
             self.loop.create_task(self._provision_shift_ban_infrastructure())
+
+    async def _preload_permissions(self) -> None:
+        from utils.permissions import load_guild_permissions
+
+        await self.wait_until_ready()
+        for gid in all_guild_ids():
+            try:
+                await load_guild_permissions(gid)
+            except Exception:
+                log.exception("Failed to preload permissions for guild %s", gid)
+            await asyncio.sleep(0.25)
 
     async def _provision_shift_ban_infrastructure(self) -> None:
         from utils.soft_ban import provision_shift_ban_infrastructure

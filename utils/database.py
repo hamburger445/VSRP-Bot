@@ -58,6 +58,11 @@ def _pool_timeout(key: str, default: int | None) -> float | None:
     return float(raw)
 
 
+def _acquire_timeout() -> float:
+    raw = load_config().get("database", {}).get("acquire_timeout_seconds", 10)
+    return float(raw or 10)
+
+
 _SCHEMA_VERSION = 5
 
 
@@ -89,7 +94,6 @@ class Database:
             except _TRANSIENT_DB_ERRORS as exc:
                 last_exc = exc
                 if attempt == 0:
-                    log.warning("Database connection lost (%s), reconnecting pool", exc)
                     db = await _reconnect_pool()
                     self._pool = db._pool
                     continue
@@ -108,7 +112,7 @@ class Database:
         query = _to_pg_placeholders(query)
 
         async def _run(pool: asyncpg.Pool):
-            async with pool.acquire() as conn:
+            async with pool.acquire(timeout=_acquire_timeout()) as conn:
                 row = await conn.fetchrow(query, *params)
                 return dict(row) if row else None
 
@@ -118,7 +122,7 @@ class Database:
         query = _to_pg_placeholders(query)
 
         async def _run(pool: asyncpg.Pool):
-            async with pool.acquire() as conn:
+            async with pool.acquire(timeout=_acquire_timeout()) as conn:
                 rows = await conn.fetch(query, *params)
                 return [dict(row) for row in rows]
 
@@ -128,7 +132,7 @@ class Database:
         query = _to_pg_placeholders(query)
 
         async def _run(pool: asyncpg.Pool):
-            async with pool.acquire() as conn:
+            async with pool.acquire(timeout=_acquire_timeout()) as conn:
                 status = await conn.execute(query, *params)
                 parts = status.split()
                 count = int(parts[-1]) if parts and parts[-1].isdigit() else 0
@@ -168,7 +172,7 @@ async def _create_pool(*, initialize_schema: bool) -> tuple[asyncpg.Pool, Databa
     if initialize_schema:
         await init_tables(pool)
     else:
-        async with pool.acquire() as conn:
+        async with pool.acquire(timeout=_acquire_timeout()) as conn:
             await conn.fetchval("SELECT 1")
     return pool, Database(pool)
 
@@ -179,12 +183,13 @@ async def _reconnect_pool() -> Database:
     async with _pool_lock:
         if _db is not None and _pool is not None:
             try:
-                async with _pool.acquire() as conn:
+                async with _pool.acquire(timeout=_acquire_timeout()) as conn:
                     await conn.fetchval("SELECT 1")
                 return _db
             except _TRANSIENT_DB_ERRORS:
                 pass
 
+        log.warning("Database connection lost, reconnecting pool")
         old_pool = _pool
         _pool = None
         if old_pool is not None:
@@ -193,7 +198,11 @@ async def _reconnect_pool() -> Database:
             except Exception as exc:
                 log.warning("Error closing database pool: %s", exc)
 
-        new_pool, _ = await _create_pool(initialize_schema=not _schema_initialized)
+        try:
+            new_pool, _ = await _create_pool(initialize_schema=not _schema_initialized)
+        except Exception as exc:
+            log.error("PostgreSQL reconnect failed: %r", exc)
+            raise
         _pool = new_pool
         if _db is None:
             _db = Database(new_pool)
@@ -525,7 +534,7 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         "CREATE INDEX IF NOT EXISTS idx_application_answers_app ON application_answers(application_id)",
         "CREATE INDEX IF NOT EXISTS idx_audit_logs_type ON audit_logs(action_type)",
     ]
-    async with pool.acquire() as conn:
+    async with pool.acquire(timeout=_acquire_timeout()) as conn:
         for stmt in statements:
             await conn.execute(stmt)
         await _migrate_legacy(conn)

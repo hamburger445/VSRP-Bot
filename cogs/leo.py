@@ -438,6 +438,8 @@ class LawEnforcement(commands.Cog):
         department: app_commands.Choice[str],
         message: str,
     ):
+        if not await defer(interaction, ephemeral=True):
+            return
         if not is_leo(interaction.user):
             await reply(interaction, "Law enforcement or staff only.", ephemeral=True)
             return
@@ -445,7 +447,6 @@ class LawEnforcement(commands.Cog):
         if not roles:
             await reply(interaction, f"Department **{department.name}** is not configured.", ephemeral=True)
             return
-        await defer(interaction, ephemeral=True)
         channel_id = load_config().get("channels", {}).get("department_pings") or interaction.channel_id
         channel = interaction.guild.get_channel(channel_id) or interaction.channel
         mentions = " ".join(r.mention for r in roles)

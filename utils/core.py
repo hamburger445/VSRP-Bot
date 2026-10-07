@@ -329,9 +329,15 @@ def format_sync_summary(results: dict[int, list[str]]) -> str:
 # --- interactions ---
 
 
-async def defer(interaction: discord.Interaction, *, ephemeral: bool = True) -> None:
-    if not interaction.response.is_done():
+async def defer(interaction: discord.Interaction, *, ephemeral: bool = True) -> bool:
+    """Acknowledge the interaction. Returns False if the token already expired (10062)."""
+    if interaction.response.is_done():
+        return True
+    try:
         await interaction.response.defer(ephemeral=ephemeral)
+        return True
+    except discord.NotFound:
+        return False
 
 
 async def reply(interaction: discord.Interaction, *args, ephemeral: bool = False, **kwargs) -> None:
