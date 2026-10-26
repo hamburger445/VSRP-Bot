@@ -74,8 +74,9 @@ async def current_session(
         if auth.lower().startswith("bearer "):
             raw = auth[7:].strip()
     if not raw:
-        log.info("CAD /me has no session cookie or bearer token")
+        print("CAD /me: no cookie and no bearer", flush=True)
         raise HTTPException(401, "Not authenticated")
+    print("CAD /me: token present", flush=True)
     from cad.db import connection
 
     token_hash = hash_token(raw.strip().strip('"'))
@@ -85,6 +86,7 @@ async def current_session(
             token_hash,
         )
         if not sess or sess.get("revoked_at") is not None:
+            print("CAD /me: session row missing", flush=True)
             raise HTTPException(401, "Session expired")
         exp = sess.get("expires_at")
         if isinstance(exp, str):

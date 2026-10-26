@@ -8,15 +8,31 @@ function has(me: Me | null, ...keys: string[]) {
   return keys.some((k) => me.permissions.includes(k));
 }
 
+function takeSessionFromHash() {
+  const hash = window.location.hash || "";
+  const m = /(?:^[#&]|#)cad=([^&]+)/.exec(hash);
+  if (!m) return;
+  try {
+    const tok = decodeURIComponent(m[1]);
+    localStorage.setItem("vsrp_cad", tok);
+    sessionStorage.setItem("vsrp_cad", tok);
+  } catch {
+    /* ignore */
+  }
+  const csrf = /[?&#]csrf=([^&]+)/.exec(hash);
+  if (csrf) {
+    document.cookie = "vsrp_cad_csrf=" + decodeURIComponent(csrf[1]) + "; Path=/; SameSite=Lax; Secure";
+  }
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+}
+
 export default function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   useEffect(() => {
+    takeSessionFromHash();
     api<Me>("/api/auth/me")
       .then(setMe)
-      .catch((e) => {
-        if (e.status === 401) setMe(null);
-        else setMe(null);
-      });
+      .catch(() => setMe(null));
   }, []);
   if (me === undefined) return <div className="main">Loading CAD…</div>;
   return (

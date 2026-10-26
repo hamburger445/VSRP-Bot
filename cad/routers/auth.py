@@ -208,37 +208,14 @@ async def discord_callback(
             )
             await audit(conn, uid, "login", "session", str(session_id), {"via": "oauth2"})
 
-    dest = f"{origin}/"
-    max_age = settings.session_max_days * 86400
-    secure_js = "true" if origin.startswith("https://") else "false"
-    # Set the session in JS on this first-party page. Server Set-Cookie after Discord
-    # is treated as a cross-site response and Chrome drops it.
-    html = f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>Signing in</title></head>
-<body>
-<p>Signing in…</p>
-<script>
-(function() {{
-  var token = {json.dumps(raw_token)};
-  var csrf = {json.dumps(csrf)};
-  var dest = {json.dumps(dest)};
-  var maxAge = {max_age};
-  var secure = {secure_js};
-  try {{
-    localStorage.setItem("vsrp_cad", token);
-    sessionStorage.setItem("vsrp_cad", token);
-  }} catch (e) {{}}
-  var bits = "{COOKIE_NAME}=" + encodeURIComponent(token) + "; Path=/; Max-Age=" + maxAge + "; SameSite=Lax";
-  if (secure) bits += "; Secure";
-  document.cookie = bits;
-  bits = "{CSRF_COOKIE}=" + encodeURIComponent(csrf) + "; Path=/; Max-Age=" + maxAge + "; SameSite=Lax";
-  if (secure) bits += "; Secure";
-  document.cookie = bits;
-  location.replace(dest);
-}})();
-</script>
-</body></html>
-"""
+    dest = f"{origin}/#cad={raw_token}"
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'><title>Signing in</title></head><body>"
+        "<p>Signing in to VSRP CAD…</p>"
+        f"<p><a href='{dest}'>Continue to CAD</a></p>"
+        f"<script>location.replace({json.dumps(dest)});</script>"
+        "</body></html>"
+    )
     resp = HTMLResponse(html, headers={"Cache-Control": "no-store"})
     kw = _cookie_kwargs(origin, settings)
     resp.set_cookie(COOKIE_NAME, raw_token, **kw)

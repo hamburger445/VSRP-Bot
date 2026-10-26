@@ -207,13 +207,13 @@ def _limit(rows: list[dict], sql: str) -> list[dict]:
 
 
 def _from_table(sql: str) -> str:
+    m = re.search(r"\bINSERT\s+INTO\s+(\w+)", sql, re.I)
+    if m:
+        return m.group(1)
+    m = re.search(r"\bUPDATE\s+(\w+)\s+SET\b", sql, re.I)
+    if m:
+        return m.group(1)
     m = re.search(r"\bFROM\s+(\w+)", sql, re.I)
-    if m:
-        return m.group(1)
-    m = re.search(r"\bUPDATE\s+(\w+)", sql, re.I)
-    if m:
-        return m.group(1)
-    m = re.search(r"\bINTO\s+(\w+)", sql, re.I)
     if m:
         return m.group(1)
     raise ValueError(f"No table in SQL: {sql[:80]}")

@@ -20,12 +20,6 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const res = await fetch(path, { ...init, headers, credentials: "include" });
   if (res.status === 401) {
-    try {
-      localStorage.removeItem("vsrp_cad");
-      sessionStorage.removeItem("vsrp_cad");
-    } catch {
-      /* ignore */
-    }
     throw Object.assign(new Error("unauthenticated"), { status: 401 });
   }
   if (!res.ok) {
