@@ -1,28 +1,28 @@
 {
   "seq": {
-    "SET": 4,
-    "cad_audit": 2,
-    "users": 2
+    "SET": 6,
+    "cad_audit": 3,
+    "users": 3
   },
   "tables": {
     "SET": [
       {
-        "access_expires_at": "2026-11-02T22:50:39.415033+00:00",
-        "access_token_enc": "MTUxMzYwMjY5NjM3OTEwNTM2Mg.h6LervAVDRMr1Wi32vqevW52rAtjBQ",
+        "access_expires_at": "2026-11-02T22:54:47.227389+00:00",
+        "access_token_enc": "MTUxMzYwMjY5NjM3OTEwNTM2Mg.aLrENXnJnmjhSakNZvsKolOKJ3KwpN",
         "avatar_hash": "48334143c307cfa7ec75fc4776d50424",
         "discord_user_id": 1391201462259810354,
         "fd_roles": "[1514304919568384105, 1514304919752933665]",
         "global_name": "\ud835\udcda\ud835\udcfe\ud835\udcf3\ud835\udcf8",
         "id": 1,
         "in_main_guild": true,
-        "last_login_at": "2026-10-26T22:50:39.415005+00:00",
-        "last_role_sync_at": "2026-10-26T22:50:39.415011+00:00",
+        "last_login_at": "2026-10-26T22:54:47.227365+00:00",
+        "last_role_sync_at": "2026-10-26T22:54:47.227370+00:00",
         "main_roles": "[1514256466398154752, 1513924034318962949, 1244720384457052262, 1513623449715609800, 1513744263614169129, 1522402531484110888, 1250611712642781291, 1279634474333634635, 1244719576206282805, 1244718289616244789, 1244716071450185818, 1244716000721764574]",
         "pd_roles": "[1514314746134921365]",
-        "refresh_token_enc": "YxPnxixIbmr4oC9fWGRyYkcSKI9inE",
-        "scopes": "identify guilds.members.read",
+        "refresh_token_enc": "XbLRebBdEhwmJVHJGdPqGQgYKmfYH4",
+        "scopes": "guilds.members.read identify",
         "status": "active",
-        "updated_at": "2026-10-26T22:50:39.415184+00:00",
+        "updated_at": "2026-10-26T22:54:47.227544+00:00",
         "username": "mr.kujo1"
       }
     ],
@@ -42,6 +42,14 @@
         "entity_id": "de65fee0-200d-4699-82f1-2f56d0bc8e1c",
         "entity_type": "session",
         "id": 2
+      },
+      {
+        "action": "login",
+        "actor_id": 1391201462259810354,
+        "details_json": "{\"via\": \"oauth2\"}",
+        "entity_id": "963b80a4-3a15-4247-b17b-e1958475b6c0",
+        "entity_type": "session",
+        "id": 3
       }
     ],
     "cad_sessions": [
@@ -56,8 +64,15 @@
         "expires_at": "2026-10-27T10:50:39.415225+00:00",
         "id": "de65fee0-200d-4699-82f1-2f56d0bc8e1c",
         "token_hash": "f9b07258ea22f56e05aec4a5912f6c458a7b0ffafe38289e6d3436e71b9b79ca"
+      },
+      {
+        "discord_user_id": 1391201462259810354,
+        "expires_at": "2026-10-27T10:54:47.227575+00:00",
+        "id": "963b80a4-3a15-4247-b17b-e1958475b6c0",
+        "token_hash": "32c5087f628de2aecc63ca6d2a4204144b534581130d920a3a2c3910342124d0"
       }
     ],
+    "cad_users": [],
     "users": [
       {
         "id": 1,
