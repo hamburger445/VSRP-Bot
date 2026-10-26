@@ -1,0 +1,54 @@
+{
+  "seq": {
+    "SET": 2,
+    "cad_audit": 1,
+    "users": 1
+  },
+  "tables": {
+    "SET": [
+      {
+        "access_expires_at": "2026-11-02T22:47:08.881222+00:00",
+        "access_token_enc": "MTUxMzYwMjY5NjM3OTEwNTM2Mg.Q57XxKRu0IPT6a6y1WjjMCL1AAuLUg",
+        "avatar_hash": "48334143c307cfa7ec75fc4776d50424",
+        "discord_user_id": 1391201462259810354,
+        "fd_roles": "[1514304919568384105, 1514304919752933665]",
+        "global_name": "\ud835\udcda\ud835\udcfe\ud835\udcf3\ud835\udcf8",
+        "id": 1,
+        "in_main_guild": true,
+        "last_login_at": "2026-10-26T22:47:08.881148+00:00",
+        "last_role_sync_at": "2026-10-26T22:47:08.881154+00:00",
+        "main_roles": "[1514256466398154752, 1513924034318962949, 1244720384457052262, 1513623449715609800, 1513744263614169129, 1522402531484110888, 1250611712642781291, 1279634474333634635, 1244719576206282805, 1244718289616244789, 1244716071450185818, 1244716000721764574]",
+        "pd_roles": "[1514314746134921365]",
+        "refresh_token_enc": "qh7TPip0A4DN5YO0MtaFBq2SKcPW4j",
+        "scopes": "guilds.members.read identify",
+        "status": "active",
+        "updated_at": "2026-10-26T22:47:08.881332+00:00",
+        "username": "mr.kujo1"
+      }
+    ],
+    "cad_audit": [
+      {
+        "action": "login",
+        "actor_id": 1391201462259810354,
+        "details_json": "{\"via\": \"oauth2\"}",
+        "entity_id": "6b5d84ec-2c21-4e90-80e0-c541ca3ea51e",
+        "entity_type": "session",
+        "id": 1
+      }
+    ],
+    "cad_sessions": [
+      {
+        "discord_user_id": 1391201462259810354,
+        "expires_at": "2026-10-27T10:47:08.881392+00:00",
+        "id": "6b5d84ec-2c21-4e90-80e0-c541ca3ea51e",
+        "token_hash": "7c5aa796fe3f926a21cb32593c64ba2a81fd899c219ffbf4bd266f56749ec383"
+      }
+    ],
+    "users": [
+      {
+        "id": 1,
+        "user_id": 1391201462259810354
+      }
+    ]
+  }
+}
