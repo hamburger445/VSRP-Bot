@@ -7,6 +7,8 @@ from typing import Any
 
 from fastapi import Cookie, Depends, HTTPException, Request
 
+from datetime import datetime
+
 from cad.security import hash_token, utcnow
 from cad.settings import get_settings
 from utils.cad_permissions import compute_permissions, needs_dm_verify
@@ -49,7 +51,9 @@ async def _load_guild_perms(conn, guild_id: int) -> dict[str, list[int]]:
     return out
 
 
-def _json_int_list(raw: str | None) -> set[int]:
+def _json_int_list(raw: str | list | None) -> set[int]:
+    if isinstance(raw, list):
+        return {int(x) for x in raw if x is not None and str(x).lstrip("-").isdigit()}
     try:
         return {int(x) for x in json.loads(raw or "[]")}
     except (json.JSONDecodeError, TypeError, ValueError):
@@ -60,25 +64,37 @@ async def current_session(
     request: Request,
     vsrp_cad: str | None = Cookie(default=None),
 ) -> dict[str, Any]:
-    if not vsrp_cad:
+    raw = vsrp_cad or request.cookies.get(COOKIE_NAME)
+    if not raw:
         raise HTTPException(401, "Not authenticated")
     from cad.db import connection
 
-    token_hash = hash_token(vsrp_cad)
+    token_hash = hash_token(raw.strip().strip('"'))
     async with connection() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT s.id, s.discord_user_id, s.expires_at,
-                   u.username, u.global_name, u.avatar_hash, u.dm_verified_at, u.status,
-                   u.main_roles, u.fd_roles, u.pd_roles, u.in_main_guild
-            FROM cad_sessions s
-            JOIN cad_users u ON u.discord_user_id = s.discord_user_id
-            WHERE s.token_hash = $1 AND s.revoked_at IS NULL
-            """,
+        sess = await conn.fetchrow(
+            "SELECT * FROM cad_sessions WHERE token_hash = $1",
             token_hash,
         )
-        if not row or row["expires_at"] < utcnow():
+        if not sess or sess.get("revoked_at") is not None:
             raise HTTPException(401, "Session expired")
+        exp = sess.get("expires_at")
+        if isinstance(exp, str):
+            try:
+                exp = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+            except ValueError:
+                exp = None
+        if exp is not None and exp < utcnow():
+            raise HTTPException(401, "Session expired")
+        user_row = await conn.fetchrow(
+            "SELECT * FROM cad_users WHERE discord_user_id = $1",
+            sess["discord_user_id"],
+        )
+        if not user_row:
+            raise HTTPException(401, "Session expired")
+        row = dict(user_row)
+        row["id"] = sess["id"]
+        row["discord_user_id"] = sess["discord_user_id"]
+        row["expires_at"] = exp
         if row["status"] and row["status"] != "active":
             raise HTTPException(403, "Account suspended")
         await conn.execute("UPDATE cad_sessions SET last_seen_at = NOW() WHERE id = $1", row["id"])
@@ -115,7 +131,7 @@ async def current_session(
         "username": row["username"],
         "global_name": row["global_name"],
         "avatar_hash": row["avatar_hash"],
-        "dm_verified_at": row["dm_verified_at"].isoformat() if row["dm_verified_at"] else None,
+        "dm_verified_at": row["dm_verified_at"].isoformat() if hasattr(row.get("dm_verified_at"), "isoformat") else row.get("dm_verified_at"),
         "permissions": sorted(perms),
         "needs_dm_verify": bool(
             settings.require_dm_verify and needs_dm_verify(perms) and not row["dm_verified_at"]

@@ -168,7 +168,11 @@ def _match(row: dict, clause: str, args: tuple) -> bool:
         if isinstance(right, datetime) and isinstance(left, str):
             left = _parse_dt(left)
         if op == "=":
-            return left == right
+            if left == right:
+                return True
+            if left is not None and right is not None and str(left) == str(right):
+                return True
+            return False
         if op in ("!=", "<>"):
             return left != right
         if left is None or right is None:

@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 from cad.db import audit, connection, enqueue_outbox
@@ -41,8 +42,8 @@ class TotpBody(BaseModel):
     code: str
 
 
-def _cookie_kwargs(settings) -> dict:
-    secure = settings.public_url.startswith("https://")
+def _cookie_kwargs(origin: str, settings) -> dict:
+    secure = origin.startswith("https://")
     return {
         "httponly": True,
         "secure": secure,
@@ -69,8 +70,6 @@ async def discord_login(request: Request):
         "state": state,
         "prompt": "consent",
     }
-    from fastapi.responses import RedirectResponse
-
     redir = RedirectResponse(f"{OAUTH_AUTHORIZE}?{urlencode(params)}")
     redir.set_cookie(
         "cad_oauth_state",
@@ -105,8 +104,6 @@ async def discord_callback(
     state: str | None = None,
     cad_oauth_state: str | None = Cookie(default=None),
 ):
-    from fastapi.responses import RedirectResponse
-
     settings = get_settings()
     origin = origin_from_request(request)
     redirect_uri = f"{origin}/api/auth/discord/callback"
@@ -212,12 +209,32 @@ async def discord_callback(
             await audit(conn, uid, "login", "session", str(session_id), {"via": "oauth2"})
 
     dest = f"{origin}/"
-    resp = RedirectResponse(dest, status_code=302)
-    kw = _cookie_kwargs(settings)
-    kw["secure"] = origin.startswith("https://")
+    # 200 HTML, not 302: browsers often drop Set-Cookie on OAuth redirect responses.
+    resp = HTMLResponse(
+        "<!doctype html><html><head>"
+        f'<meta http-equiv="refresh" content="0;url={dest}">'
+        "</head><body>Signing in…"
+        f"<script>location.replace({json.dumps(dest)});</script>"
+        "</body></html>",
+        headers={"Cache-Control": "no-store"},
+    )
+    kw = _cookie_kwargs(origin, settings)
     resp.set_cookie(COOKIE_NAME, raw_token, **kw)
-    resp.set_cookie(CSRF_COOKIE, csrf, httponly=False, secure=kw["secure"], samesite="lax", path="/", max_age=kw["max_age"])
-    resp.delete_cookie("cad_oauth_state", path="/")
+    resp.set_cookie(
+        CSRF_COOKIE,
+        csrf,
+        httponly=False,
+        secure=kw["secure"],
+        samesite="lax",
+        path="/",
+        max_age=kw["max_age"],
+    )
+    resp.delete_cookie(
+        "cad_oauth_state",
+        path="/",
+        secure=kw["secure"],
+        samesite="lax",
+    )
     return resp
 
 
