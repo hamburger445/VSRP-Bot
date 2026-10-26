@@ -6,3 +6,8 @@ __pycache__/
 .venv/
 venv/
 *.db
+node_modules/
+web/dist/
+.pytest_cache/
+.coverage
+

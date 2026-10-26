@@ -1,21 +1,34 @@
-"""Sequential LEO case numbers (0000+)."""
+"""Sequential LEO case numbers (0000+). Allocation is atomic."""
 
 from __future__ import annotations
 
-from utils.core import get_state, set_state
+import asyncpg
 
 _CASE_STATE_KEY = "leo_case_sequence"
 
 
-async def allocate_case_number() -> str:
-    raw = await get_state(_CASE_STATE_KEY)
-    try:
-        n = int(raw) if raw else 0
-    except ValueError:
-        n = 0
-    n += 1
-    await set_state(_CASE_STATE_KEY, str(n))
+async def allocate_case_number_on_conn(conn: asyncpg.Connection) -> str:
+    row = await conn.fetchrow(
+        """
+        INSERT INTO bot_state (key, value) VALUES ($1, '1')
+        ON CONFLICT (key) DO UPDATE
+        SET value = (COALESCE(NULLIF(bot_state.value, '')::int, 0) + 1)::text
+        RETURNING value
+        """,
+        _CASE_STATE_KEY,
+    )
+    n = int(row["value"]) if row else 1
     return f"{n:04d}"
+
+
+async def allocate_case_number() -> str:
+    from utils.database import get_db
+
+    db = await get_db()
+    pool = db._pool  # noqa: SLF001
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            return await allocate_case_number_on_conn(conn)
 
 
 def format_case_number(value: str | int | None) -> str:

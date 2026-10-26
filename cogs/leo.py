@@ -31,7 +31,6 @@ from utils.leo_forms import (
 )
 from utils.permissions import is_leo
 from utils.tickets import enforce_ticket_thresholds
-from utils.users import ensure_user
 
 
 def _dept_roles(guild: discord.Guild, department: str) -> list[discord.Role]:
@@ -99,25 +98,20 @@ class LawEnforcement(commands.Cog):
         if not interaction.response.is_done():
             await defer(interaction, ephemeral=True)
 
-        case_no = await allocate_case_number()
         violation = citation_summary(form_data)
-        form_json = json.dumps(form_data)
 
         try:
-            db = await get_db()
-            await ensure_user(db, member.id)
-            row = await db.execute_fetchone(
-                """
-                INSERT INTO citation_tickets (
-                    user_id, violation, fine, issued_by, payment_status, form_json, case_number
-                )
-                VALUES (?, ?, ?, ?, 'unpaid', ?, ?)
-                RETURNING id
-                """,
-                (member.id, violation, fine, interaction.user.id, form_json, case_no),
+            from utils.leo_records import create_citation
+
+            row = await create_citation(
+                subject_id=member.id,
+                issued_by=interaction.user.id,
+                form_data=form_data,
+                fine=fine,
+                violation=violation,
             )
-            await db.commit()
-            ticket_id = row["id"] if row else 0
+            ticket_id = row.get("id") or 0
+            case_no = row.get("case_number") or await allocate_case_number()
         except (DatabaseTimeoutError, DatabaseError):
             await reply(interaction, "Database error. Please try again.", ephemeral=True)
             return
@@ -168,25 +162,19 @@ class LawEnforcement(commands.Cog):
         if not interaction.response.is_done():
             await defer(interaction, ephemeral=True)
 
-        case_no = await allocate_case_number()
         reason = warrant_form_to_reason(form_data)
-        form_json = json.dumps(form_data)
 
         try:
-            db = await get_db()
-            await ensure_user(db, member.id)
-            row = await db.execute_fetchone(
-                """
-                INSERT INTO warrants (
-                    user_id, reason, issued_by, active, status, form_json, case_number
-                )
-                VALUES (?, ?, ?, 1, 'active', ?, ?)
-                RETURNING id
-                """,
-                (member.id, reason, interaction.user.id, form_json, case_no),
+            from utils.leo_records import create_warrant
+
+            row = await create_warrant(
+                subject_id=member.id,
+                issued_by=interaction.user.id,
+                form_data=form_data,
+                reason=reason,
             )
-            await db.commit()
-            warrant_id = row["id"] if row else 0
+            warrant_id = row.get("id") or 0
+            case_no = row.get("case_number") or await allocate_case_number()
         except (DatabaseTimeoutError, DatabaseError):
             await reply(interaction, "Database error. Please try again.", ephemeral=True)
             return

@@ -63,7 +63,7 @@ def _acquire_timeout() -> float:
     return float(raw or 10)
 
 
-_SCHEMA_VERSION = 5
+_SCHEMA_VERSION = 6
 
 
 def _to_pg_placeholders(query: str) -> str:
@@ -538,6 +538,9 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         for stmt in statements:
             await conn.execute(stmt)
         await _migrate_legacy(conn)
+        from cad.schema import init_cad_schema
+
+        await init_cad_schema(conn)
 
 
 async def _add_column_if_missing(

@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: vsrp-cad
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt -r requirements-cad.txt && cd web && npm ci && npm run build
+    startCommand: uvicorn cad.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: CAD_DATABASE_DIRECT_URL
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_REDIRECT_URI
+        sync: false
+      - key: CAD_PUBLIC_URL
+        sync: false
+      - key: CAD_SESSION_SECRET
+        generateValue: true
+      - key: CAD_SECRETS_KEY
+        sync: false
+      - key: CAD_CODE_PEPPER
+        generateValue: true
+      - key: CAD_MAIN_GUILD_ID
+        sync: false
+      - key: CAD_FD_GUILD_ID
+        sync: false
+      - key: CAD_PD_GUILD_ID
+        sync: false
+# Do not set DISCORD_TOKEN on this service while the panel bot is running.

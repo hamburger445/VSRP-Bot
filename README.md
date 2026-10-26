@@ -51,6 +51,12 @@ When `GITHUB_TOKEN` is set, permission changes from `/setup-permissions` and `-r
 
 **Never commit `.env` or tokens to GitHub.**
 
+## CAD / MDT website
+
+See [docs/CAD.md](docs/CAD.md). The Discord bot stays on the game panel (`python bot.py`). The CAD is a FastAPI + React app that uses the **same PostgreSQL database**.
+
+Local: `uvicorn cad.app:app --port 8000` and `cd web && npm run dev`. Render blueprint: `render.yaml` (web only — no second bot).
+
 ## Container hosting (GitHub pull on start)
 
 See [STARTUP.md](STARTUP.md) for the panel startup command and env vars (`GITHUB_TOKEN`, `GITHUB_REPO`, etc.).

@@ -10,6 +10,10 @@ bot:
   activity_name: "VSRC Sessions"
   activity_type: "watching"
 
+cad:
+  public_url: ""
+  require_dm_verify: true
+
 guild:
   id: 1244711126348992603
 
@@ -73,6 +77,7 @@ channels:
   citations: 1513626668516905151
   warrants: 1513626619108004110
   department_pings: 1513626880081793095
+  cad_panic: 1513626880081793095
   tickets: 1250622854110773291
   ticket_logs: 1513625621752975512
   info_panel: 1250620475722174575
