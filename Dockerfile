@@ -12,6 +12,6 @@ ENV PYTHONUNBUFFERED=1 \
 COPY requirements.txt requirements-cad.txt ./
 RUN pip install --no-cache-dir -r requirements.txt -r requirements-cad.txt
 COPY . .
-COPY --from=frontend /web/dist ./web/dist
+COPY --from=frontend /cad/static/web ./cad/static/web
 EXPOSE 10000
 CMD ["sh", "-c", "uvicorn cad.app:app --host 0.0.0.0 --port ${PORT:-10000}"]

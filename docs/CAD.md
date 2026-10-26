@@ -76,7 +76,7 @@ Dashboard → Settings:
 
 No `--reload`. No `pip install` in Start Command. `$PORT` is required (do not hardcode `8000`).
 
-The UI will be missing on a Python service (no Node/npm). Use Docker for the full website.
+The CAD UI is committed under `cad/static/web` so a Python Render service can serve it without Node. Rebuild with `cd web && npm run build` after frontend changes.
 
 ### Docker (UI + API)
 

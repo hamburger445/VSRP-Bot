@@ -16,7 +16,7 @@ from cad.routers import admin, auth, dispatch, ops, ws
 from cad.settings import get_settings
 
 log = logging.getLogger("vsrp_bot.cad")
-WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
+WEB_DIST = Path(__file__).resolve().parent / "static" / "web"
 
 
 @asynccontextmanager
@@ -115,17 +115,27 @@ _FALLBACK_HTML = """<!doctype html>
   <main>
     <h1>VSRP CAD</h1>
     <p>Operations console</p>
-    <p id="status">Checking database…</p>
-    <p><a class="btn" href="/api/auth/discord/login">Continue with Discord</a></p>
+    <p id="status">Checking session…</p>
+    <p id="login"><a class="btn" href="/api/auth/discord/login">Continue with Discord</a></p>
     <p><a href="/api/docs">API docs</a> · <a href="/api/health">Health</a></p>
   </main>
   <script>
-    fetch("/api/health").then(r => r.json()).then(d => {
-      const el = document.getElementById("status");
-      if (d.database) el.innerHTML = '<span class="ok">Database connected.</span>';
-      else el.innerHTML = '<span class="err">Database unavailable: ' + (d.errors||[]).join(" ") + '</span>';
+    const status = document.getElementById("status");
+    const login = document.getElementById("login");
+    Promise.all([
+      fetch("/api/health").then(r => r.json()),
+      fetch("/api/auth/me", { credentials: "include" }).then(r => r.ok ? r.json() : null).catch(() => null)
+    ]).then(([h, me]) => {
+      if (me) {
+        status.innerHTML = '<span class="ok">Signed in as ' + (me.global_name || me.username) + '</span>';
+        login.innerHTML = '<a class="btn" href="/api/dashboard">Open dashboard API</a> · <a href="/api/auth/logout">Sign out</a>';
+      } else if (h.database) {
+        status.innerHTML = '<span class="ok">Database connected.</span> Sign in to open CAD.';
+      } else {
+        status.innerHTML = '<span class="err">Database unavailable: ' + (h.errors||[]).join(" ") + '</span>';
+      }
     }).catch(() => {
-      document.getElementById("status").textContent = "Could not reach /api/health.";
+      status.textContent = "Could not reach the CAD API.";
     });
   </script>
 </body>
