@@ -84,6 +84,7 @@ async def github_put_json(relative_path: str, data: dict[str, Any], *, message: 
         body: dict[str, Any] = {
             "message": message,
             "content": content_b64,
+            "branch": get_github_repo_branch(),
         }
         if sha:
             body["sha"] = sha

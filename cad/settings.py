@@ -96,7 +96,9 @@ class CadSettings:
 
     def health_errors(self) -> list[str]:
         errors: list[str] = []
-        if not self.database_url:
+        from cad.github_db import github_enabled
+
+        if not github_enabled() and not self.database_url:
             errors.append("DATABASE_URL is missing")
         if not self.main_guild_id:
             errors.append("CAD_MAIN_GUILD_ID (or config servers.main.id) is missing")

@@ -79,7 +79,15 @@ The UI will be missing on a Python service (no Node/npm). Use Docker for the ful
 
 Settings → Runtime **Docker**, Dockerfile `./Dockerfile`. The image already runs uvicorn on `$PORT`.
 
-Required env: `DATABASE_URL` (same Postgres as the bot). Do **not** run `python bot.py` on this service while the panel bot is online.
+If Neon Postgres is over quota, set CAD to GitHub JSON storage (same repo the bot already mirrors permissions to):
+
+```
+GITHUB_TOKEN=ghp_...
+GITHUB_REPO=hamburger445/VSRP-Bot
+CAD_DATABASE=github
+```
+
+CAD data is stored at `data/cad/db.json` on the `main` branch. The Discord bot can keep using Postgres when that database is healthy. Do **not** run `python bot.py` on this Render service while the panel bot is online.
 
 ## Discord commands (after `/sync`)
 

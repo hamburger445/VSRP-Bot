@@ -1,45 +1,55 @@
-"""CAD database helpers on the shared asyncpg pool."""
+"""CAD database helpers: PostgreSQL when available, otherwise GitHub JSON."""
 
 from __future__ import annotations
 
 import json
+import logging
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
-import asyncpg
-
+from cad.github_db import github_connection, github_enabled
 from utils.database import get_db
 
+log = logging.getLogger("vsrp_bot.cad.db")
 
-async def pool() -> asyncpg.Pool:
-    db = await get_db()
-    return db._pool  # noqa: SLF001 — shared process pool
+
+def using_github() -> bool:
+    return github_enabled()
 
 
 @asynccontextmanager
-async def connection() -> AsyncIterator[asyncpg.Connection]:
-    async with (await pool()).acquire() as conn:
+async def connection() -> AsyncIterator[Any]:
+    if github_enabled():
+        async with github_connection() as conn:
+            yield conn
+        return
+    db = await get_db()
+    async with db._pool.acquire() as conn:  # noqa: SLF001
         yield conn
 
 
 @asynccontextmanager
-async def transaction() -> AsyncIterator[asyncpg.Connection]:
-    async with (await pool()).acquire() as conn:
-        async with conn.transaction():
+async def transaction() -> AsyncIterator[Any]:
+    async with connection() as conn:
+        tx = conn.transaction()
+        if hasattr(tx, "__aenter__"):
+            async with tx:
+                yield conn
+        else:
             yield conn
 
 
-def row_to_dict(row: asyncpg.Record | None) -> dict | None:
+def row_to_dict(row: Any | None) -> dict | None:
     if row is None:
         return None
     return dict(row)
 
 
-def rows_to_dicts(rows: list[asyncpg.Record]) -> list[dict]:
+def rows_to_dicts(rows: list[Any]) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-async def enqueue_outbox(conn: asyncpg.Connection, kind: str, payload: dict) -> None:
+async def enqueue_outbox(conn: Any, kind: str, payload: dict) -> None:
     await conn.execute(
         "INSERT INTO cad_outbox (kind, payload_json) VALUES ($1, $2)",
         kind,
@@ -48,7 +58,7 @@ async def enqueue_outbox(conn: asyncpg.Connection, kind: str, payload: dict) -> 
 
 
 async def audit(
-    conn: asyncpg.Connection,
+    conn: Any,
     actor_id: int | None,
     action: str,
     entity_type: str | None = None,

@@ -21,14 +21,25 @@ WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from cad.github_db import github_enabled
     from utils.database import get_db
 
-    try:
-        await get_db()
-        start_listener()
-        log.info("CAD API started")
-    except Exception:
-        log.exception("CAD database init failed; serving HTTP anyway")
+    if github_enabled():
+        from cad.github_db import github_connection
+
+        try:
+            async with github_connection() as conn:
+                await conn.fetchval("SELECT 1")
+            log.info("CAD using GitHub JSON database")
+        except Exception:
+            log.exception("CAD GitHub database init failed; serving HTTP anyway")
+    else:
+        try:
+            await get_db()
+            start_listener()
+            log.info("CAD API started (PostgreSQL)")
+        except Exception:
+            log.exception("CAD database init failed; serving HTTP anyway")
     yield
     await stop_listener()
 
@@ -59,11 +70,12 @@ app.include_router(ws.router)
 
 @app.get("/api/health")
 async def health():
+    from cad.db import connection, using_github
+
     errors = settings.health_errors()
     db_ok = False
+    backend = "github" if using_github() else "postgres"
     try:
-        from cad.db import connection
-
         async with connection() as conn:
             await conn.fetchval("SELECT 1")
         db_ok = True
@@ -75,6 +87,7 @@ async def health():
         {
             "status": status,
             "database": db_ok,
+            "backend": backend,
             "errors": errors,
             "oauth_configured": settings.oauth_configured(),
         }

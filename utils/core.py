@@ -150,6 +150,9 @@ def get_github_token() -> str | None:
 
 
 def get_github_repo() -> str:
+    env_repo = _clean_env(os.getenv("GITHUB_REPO", ""))
+    if env_repo:
+        return env_repo
     return load_config().get("github", {}).get("repo", "hamburger445/VSRP-Bot")
 
 
