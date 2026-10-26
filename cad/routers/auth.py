@@ -23,7 +23,7 @@ from cad.security import (
     session_expiry,
     utcnow,
 )
-from cad.settings import get_settings
+from cad.settings import get_settings, origin_from_request
 from utils.cad_permissions import needs_dm_verify
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -53,23 +53,17 @@ def _cookie_kwargs(settings) -> dict:
 
 
 @router.get("/discord/login")
-async def discord_login(response: Response):
+async def discord_login(request: Request):
     settings = get_settings()
     if not settings.oauth_configured():
         raise HTTPException(503, "Discord OAuth is not configured")
+    origin = origin_from_request(request)
+    redirect_uri = f"{origin}/api/auth/discord/callback"
     state = secrets.token_urlsafe(24)
-    response.set_cookie(
-        "cad_oauth_state",
-        state,
-        httponly=True,
-        samesite="lax",
-        secure=settings.public_url.startswith("https://"),
-        path="/",
-        max_age=600,
-    )
+    secure = origin.startswith("https://")
     params = {
         "client_id": settings.discord_client_id,
-        "redirect_uri": settings.discord_redirect_uri,
+        "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": "identify guilds.members.read",
         "state": state,
@@ -83,7 +77,7 @@ async def discord_login(response: Response):
         state,
         httponly=True,
         samesite="lax",
-        secure=settings.public_url.startswith("https://"),
+        secure=secure,
         path="/",
         max_age=600,
     )
@@ -114,6 +108,8 @@ async def discord_callback(
     from fastapi.responses import RedirectResponse
 
     settings = get_settings()
+    origin = origin_from_request(request)
+    redirect_uri = f"{origin}/api/auth/discord/callback"
     if not code or not state or state != cad_oauth_state:
         raise HTTPException(400, "Invalid OAuth state")
     async with httpx.AsyncClient(timeout=20) as client:
@@ -124,7 +120,7 @@ async def discord_callback(
                 "client_secret": settings.discord_client_secret,
                 "grant_type": "authorization_code",
                 "code": code,
-                "redirect_uri": settings.discord_redirect_uri,
+                "redirect_uri": redirect_uri,
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
@@ -215,9 +211,10 @@ async def discord_callback(
             )
             await audit(conn, uid, "login", "session", str(session_id), {"via": "oauth2"})
 
-    dest = f"{settings.public_url}/"
+    dest = f"{origin}/"
     resp = RedirectResponse(dest, status_code=302)
     kw = _cookie_kwargs(settings)
+    kw["secure"] = origin.startswith("https://")
     resp.set_cookie(COOKIE_NAME, raw_token, **kw)
     resp.set_cookie(CSRF_COOKIE, csrf, httponly=False, secure=kw["secure"], samesite="lax", path="/", max_age=kw["max_age"])
     resp.delete_cookie("cad_oauth_state", path="/")

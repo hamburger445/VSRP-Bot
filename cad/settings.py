@@ -28,20 +28,46 @@ def _csv_ints(name: str) -> list[int]:
     return out
 
 
+def _is_loopback(url: str) -> bool:
+    u = (url or "").lower()
+    return "127.0.0.1" in u or "localhost" in u or u.startswith("http://0.0.0.0")
+
+
+def resolve_public_url() -> str:
+    public = os.getenv("CAD_PUBLIC_URL", "").strip().rstrip("/")
+    render = os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+    if render:
+        if not render.startswith("http"):
+            render = "https://" + render
+        if not public or _is_loopback(public):
+            return render
+    if public:
+        return public
+    return "http://127.0.0.1:8000"
+
+
+def origin_from_request(request) -> str:
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
+    proto = (request.headers.get("x-forwarded-proto") or getattr(request.url, "scheme", "") or "https").split(",")[0].strip()
+    if host and not _is_loopback(host):
+        return f"{proto}://{host}".rstrip("/")
+    return get_settings().public_url
+
+
 class CadSettings:
     def __init__(self) -> None:
         self.app_env = os.getenv("APP_ENV", "development")
         self.log_level = os.getenv("LOG_LEVEL", "INFO")
         self.database_url = os.getenv("DATABASE_URL", "").strip()
         self.database_direct_url = os.getenv("CAD_DATABASE_DIRECT_URL", "").strip()
-        self.public_url = os.getenv("CAD_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")
-        self.frontend_url = os.getenv("FRONTEND_URL", self.public_url).rstrip("/")
+        self.public_url = resolve_public_url()
+        self.frontend_url = (os.getenv("FRONTEND_URL", "") or self.public_url).rstrip("/")
         self.discord_client_id = os.getenv("DISCORD_CLIENT_ID", "").strip()
         self.discord_client_secret = os.getenv("DISCORD_CLIENT_SECRET", "").strip()
-        self.discord_redirect_uri = os.getenv(
-            "DISCORD_REDIRECT_URI",
-            f"{self.public_url}/api/auth/discord/callback",
-        ).strip()
+        redirect = os.getenv("DISCORD_REDIRECT_URI", "").strip()
+        if not redirect or (_is_loopback(redirect) and not _is_loopback(self.public_url)):
+            redirect = f"{self.public_url}/api/auth/discord/callback"
+        self.discord_redirect_uri = redirect
         self.session_secret = os.getenv("CAD_SESSION_SECRET") or os.getenv("SESSION_SECRET") or ""
         self.secrets_key = os.getenv("CAD_SECRETS_KEY", "")
         self.code_pepper = os.getenv("CAD_CODE_PEPPER", "")

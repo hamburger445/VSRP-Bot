@@ -29,10 +29,13 @@ pytest
 
 ## Discord application (same app as the bot)
 
-1. Developer Portal → OAuth2 → add redirect `https://YOUR-CAD/api/auth/discord/callback` (and `http://127.0.0.1:8000/api/auth/discord/callback` for local).
-2. Create OAuth2 client secret.
-3. Scopes used: `identify`, `guilds.members.read`.
-4. Bot stays in the main / FD / PD guilds. Do not create a second bot.
+1. Developer Portal → OAuth2 → Redirects, add **both**:
+   - `https://vsrp-bot-vp0e.onrender.com/api/auth/discord/callback`
+   - `http://127.0.0.1:8000/api/auth/discord/callback` (local only)
+2. On Render set `CAD_PUBLIC_URL=https://vsrp-bot-vp0e.onrender.com` and `DISCORD_REDIRECT_URI=https://vsrp-bot-vp0e.onrender.com/api/auth/discord/callback`. Do not copy the localhost values from `.env`.
+3. Create OAuth2 client secret.
+4. Scopes used: `identify`, `guilds.members.read`.
+5. Bot stays in the main / FD / PD guilds. Do not create a second bot.
 
 ## Environment
 

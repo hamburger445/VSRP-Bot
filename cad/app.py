@@ -90,6 +90,8 @@ async def health():
             "backend": backend,
             "errors": errors,
             "oauth_configured": settings.oauth_configured(),
+            "public_url": settings.public_url,
+            "oauth_redirect": settings.discord_redirect_uri,
         }
     )
 
