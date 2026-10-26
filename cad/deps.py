@@ -106,7 +106,7 @@ async def current_session(
         row["id"] = sess["id"]
         row["discord_user_id"] = sess["discord_user_id"]
         row["expires_at"] = exp
-        if row["status"] and row["status"] != "active":
+        if row.get("status") and row.get("status") != "active":
             raise HTTPException(403, "Account suspended")
         await conn.execute("UPDATE cad_sessions SET last_seen_at = NOW() WHERE id = $1", row["id"])
         overrides_rows = await conn.fetch(
@@ -137,17 +137,18 @@ async def current_session(
         reviewer_role_ids=settings.reviewer_role_ids,
         overrides=overrides,
     )
+    dm_verified = row.get("dm_verified_at")
     user = {
         "discord_user_id": int(row["discord_user_id"]),
-        "username": row["username"],
-        "global_name": row["global_name"],
-        "avatar_hash": row["avatar_hash"],
-        "dm_verified_at": row["dm_verified_at"].isoformat() if hasattr(row.get("dm_verified_at"), "isoformat") else row.get("dm_verified_at"),
+        "username": row.get("username"),
+        "global_name": row.get("global_name"),
+        "avatar_hash": row.get("avatar_hash"),
+        "dm_verified_at": dm_verified.isoformat() if hasattr(dm_verified, "isoformat") else dm_verified,
         "permissions": sorted(perms),
         "needs_dm_verify": bool(
-            settings.require_dm_verify and needs_dm_verify(perms) and not row["dm_verified_at"]
+            settings.require_dm_verify and needs_dm_verify(perms) and not dm_verified
         ),
-        "in_main_guild": bool(row["in_main_guild"]),
+        "in_main_guild": bool(row.get("in_main_guild")),
     }
     request.state.cad_user = user
     return user
