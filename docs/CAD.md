@@ -55,9 +55,16 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ## Render
 
-Blueprint: `render.yaml` (one web service). Set env vars in the dashboard. Build compiles the React app into `web/dist`; FastAPI serves it.
+`render.yaml` deploys a **Docker** web service (Python + Node in one image). Native Python on Render does not include `npm`, which caused the previous crash.
 
-Do **not** run `python bot.py` on Render while the panel bot is online.
+If this service was created as Python:
+
+1. Dashboard → **Settings** → set **Language / Runtime** to **Docker**, Dockerfile path `./Dockerfile`, or
+2. Create a new Blueprint from `render.yaml`.
+
+Required env: `DATABASE_URL` (same Postgres as the bot). Render `postgres://` URLs work. Health check is `/api/health` and returns HTTP 200 while the process is up.
+
+Do **not** run `python bot.py` on this service while the panel bot is online.
 
 ## Discord commands (after `/sync`)
 

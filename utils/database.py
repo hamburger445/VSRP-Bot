@@ -36,12 +36,13 @@ class DatabaseError(Exception):
 
 def _normalize_url(url: str) -> str:
     parsed = urlparse(url)
+    scheme = "postgresql" if parsed.scheme in {"postgres", "postgresql"} else parsed.scheme
     params = parse_qs(parsed.query, keep_blank_values=True)
     params.pop("channel_binding", None)
     if "sslmode" not in params:
         params["sslmode"] = ["require"]
     new_query = urlencode({k: v[0] for k, v in params.items()})
-    return urlunparse(parsed._replace(query=new_query))
+    return urlunparse(parsed._replace(scheme=scheme, query=new_query))
 
 
 def _query_timeout() -> float | None:
@@ -538,9 +539,12 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         for stmt in statements:
             await conn.execute(stmt)
         await _migrate_legacy(conn)
-        from cad.schema import init_cad_schema
+        try:
+            from cad.schema import init_cad_schema
 
-        await init_cad_schema(conn)
+            await init_cad_schema(conn)
+        except Exception as exc:
+            log.exception("CAD schema init failed: %s", exc)
 
 
 async def _add_column_if_missing(

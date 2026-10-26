@@ -9,7 +9,7 @@ from datetime import timedelta
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Cookie, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from cad.db import audit, connection, enqueue_outbox

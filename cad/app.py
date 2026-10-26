@@ -23,9 +23,12 @@ WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 async def lifespan(app: FastAPI):
     from utils.database import get_db
 
-    await get_db()
-    start_listener()
-    log.info("CAD API started")
+    try:
+        await get_db()
+        start_listener()
+        log.info("CAD API started")
+    except Exception:
+        log.exception("CAD database init failed; serving HTTP anyway")
     yield
     await stop_listener()
 
@@ -67,10 +70,14 @@ async def health():
     except Exception as exc:
         errors.append(f"database: {exc}")
     status = "ok" if db_ok and not errors else "degraded"
-    code = 200 if db_ok else 503
+    # Always 200 so Render liveness does not restart a running API.
     return JSONResponse(
-        {"status": status, "database": db_ok, "errors": errors, "oauth_configured": settings.oauth_configured()},
-        status_code=code,
+        {
+            "status": status,
+            "database": db_ok,
+            "errors": errors,
+            "oauth_configured": settings.oauth_configured(),
+        }
     )
 
 
@@ -79,7 +86,12 @@ if WEB_DIST.is_dir():
 
     @app.get("/{full_path:path}")
     async def spa(full_path: str):
+        if full_path.startswith("api"):
+            return JSONResponse({"detail": "Not found"}, status_code=404)
         candidate = WEB_DIST / full_path
         if full_path and candidate.is_file():
             return FileResponse(candidate)
-        return FileResponse(WEB_DIST / "index.html")
+        index = WEB_DIST / "index.html"
+        if index.is_file():
+            return FileResponse(index)
+        return JSONResponse({"detail": "CAD UI not built"}, status_code=404)

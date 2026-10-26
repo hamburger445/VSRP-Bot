@@ -1,14 +1,11 @@
 services:
   - type: web
     name: vsrp-cad
-    runtime: python
+    runtime: docker
     plan: starter
-    buildCommand: pip install -r requirements.txt -r requirements-cad.txt && cd web && npm ci && npm run build
-    startCommand: uvicorn cad.app:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.9"
       - key: APP_ENV
         value: production
       - key: DATABASE_URL

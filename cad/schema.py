@@ -289,11 +289,15 @@ async def init_cad_schema(conn: asyncpg.Connection) -> None:
         if not exists:
             continue
         await conn.execute(f"DROP TRIGGER IF EXISTS cad_notify_{table} ON {table}")
-        await conn.execute(
-            f"""
+        trigger_sql = f"""
             CREATE TRIGGER cad_notify_{table}
             AFTER INSERT OR UPDATE OR DELETE ON {table}
             FOR EACH ROW EXECUTE PROCEDURE cad_notify()
             """
-        )
+        try:
+            await conn.execute(trigger_sql)
+        except asyncpg.PostgresError:
+            await conn.execute(
+                trigger_sql.replace("EXECUTE PROCEDURE", "EXECUTE FUNCTION")
+            )
     log.info("CAD schema ready")
