@@ -18,11 +18,18 @@ def _enabled() -> bool:
     return bool(get_github_token())
 
 
-def _api_url(path: str) -> str:
+def _headers(token: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def _api_url(path: str, branch: str | None = None) -> str:
     repo = get_github_repo()
-    branch = get_github_repo_branch()
     encoded_path = "/".join(path.strip("/").split("/"))
-    return f"https://api.github.com/repos/{repo}/contents/{encoded_path}?ref={branch}"
+    return f"https://api.github.com/repos/{repo}/contents/{encoded_path}?ref={branch or get_github_repo_branch()}"
 
 
 def get_github_repo_branch() -> str:
@@ -31,17 +38,42 @@ def get_github_repo_branch() -> str:
     return load_config().get("github", {}).get("branch", "main")
 
 
-async def github_get_json(relative_path: str) -> dict[str, Any] | None:
+async def ensure_github_branch(branch: str) -> bool:
+    token = get_github_token()
+    if not token or not branch:
+        return False
+    repo = get_github_repo()
+    headers = _headers(token)
+    base = f"https://api.github.com/repos/{repo}/git/ref/heads"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"{base}/{branch}", headers=headers) as resp:
+            if resp.status == 200:
+                return True
+        source = get_github_repo_branch()
+        async with session.get(f"{base}/{source}", headers=headers) as resp:
+            if resp.status != 200:
+                log.warning("GitHub could not read branch %s (%s)", source, resp.status)
+                return False
+            sha = (await resp.json())["object"]["sha"]
+        async with session.post(
+            f"https://api.github.com/repos/{repo}/git/refs",
+            headers=headers,
+            json={"ref": f"refs/heads/{branch}", "sha": sha},
+        ) as resp:
+            if resp.status in (201, 422):
+                return True
+            text = await resp.text()
+            log.warning("GitHub create branch %s failed (%s): %s", branch, resp.status, text[:200])
+            return False
+
+
+async def github_get_json(relative_path: str, *, branch: str | None = None) -> dict[str, Any] | None:
     token = get_github_token()
     if not token:
         return None
 
-    url = _api_url(relative_path)
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    url = _api_url(relative_path, branch)
+    headers = _headers(token)
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as resp:
             if resp.status == 404:
@@ -59,21 +91,27 @@ async def github_get_json(relative_path: str) -> dict[str, Any] | None:
         return None
 
 
-async def github_put_json(relative_path: str, data: dict[str, Any], *, message: str) -> bool:
+async def github_put_json(
+    relative_path: str,
+    data: dict[str, Any],
+    *,
+    message: str,
+    branch: str | None = None,
+) -> bool:
     token = get_github_token()
     if not token:
         return False
 
+    target_branch = branch or get_github_repo_branch()
+    if branch:
+        await ensure_github_branch(target_branch)
+
     content_bytes = json.dumps(data, indent=2, sort_keys=True).encode("utf-8")
     content_b64 = base64.b64encode(content_bytes).decode("ascii")
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = _headers(token)
 
-    url = _api_url(relative_path)
+    url = _api_url(relative_path, target_branch)
     sha: str | None = None
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as resp:
@@ -84,7 +122,7 @@ async def github_put_json(relative_path: str, data: dict[str, Any], *, message: 
         body: dict[str, Any] = {
             "message": message,
             "content": content_b64,
-            "branch": get_github_repo_branch(),
+            "branch": target_branch,
         }
         if sha:
             body["sha"] = sha

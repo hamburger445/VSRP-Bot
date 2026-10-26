@@ -92,6 +92,7 @@ async def health():
             "oauth_configured": settings.oauth_configured(),
             "public_url": settings.public_url,
             "oauth_redirect": settings.discord_redirect_uri,
+            "ui": (WEB_DIST / "index.html").is_file(),
         }
     )
 

@@ -23,6 +23,11 @@ def db_path() -> str:
     return os.getenv("CAD_GITHUB_PATH", "data/cad/db.json")
 
 
+def data_branch() -> str:
+    """Keep CAD JSON off main so Render does not redeploy on every login."""
+    return os.getenv("CAD_GITHUB_BRANCH", "cad-data")
+
+
 def github_enabled() -> bool:
     mode = os.getenv("CAD_DATABASE", "auto").strip().lower()
     if mode in {"github", "gh", "json"}:
@@ -36,7 +41,9 @@ async def _ensure_loaded() -> None:
     global _state
     if _state is not None:
         return
-    raw = await github_get_json(db_path())
+    raw = await github_get_json(db_path(), branch=data_branch())
+    if not isinstance(raw, dict):
+        raw = await github_get_json(db_path())
     _state = load_state(raw if isinstance(raw, dict) else {})
     log.info("CAD GitHub database loaded (%s tables)", len(_state.get("tables") or {}))
 
@@ -49,6 +56,7 @@ async def persist() -> None:
         db_path(),
         dump_state(_state),
         message="Update CAD JSON database",
+        branch=data_branch(),
     )
     if ok:
         _dirty = False
@@ -77,7 +85,9 @@ class GithubConn:
         global _dirty
         await _ensure_loaded()
         result = run(_state, sql, args, "execute")
-        if str(sql).lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE")):
+        text = str(sql)
+        upper = text.lstrip().upper()
+        if upper.startswith(("INSERT", "UPDATE", "DELETE")) and "last_seen_at" not in text:
             _dirty = True
         return result
 

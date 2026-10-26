@@ -90,7 +90,7 @@ GITHUB_REPO=hamburger445/VSRP-Bot
 CAD_DATABASE=github
 ```
 
-CAD data is stored at `data/cad/db.json` on the `main` branch. The Discord bot can keep using Postgres when that database is healthy. Do **not** run `python bot.py` on this Render service while the panel bot is online.
+CAD data is stored at `data/cad/db.json` on the **`cad-data` branch** (not `main`), so logins do not trigger a Render redeploy. The Discord bot can keep using Postgres when that database is healthy. Do **not** run `python bot.py` on this Render service while the panel bot is online.
 
 ## Discord commands (after `/sync`)
 
