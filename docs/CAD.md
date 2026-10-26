@@ -68,7 +68,7 @@ Dashboard → Settings:
 | Field | Value |
 |-------|--------|
 | **Build Command** | `pip install -r requirements.txt -r requirements-cad.txt` |
-| **Start Command** | `uvicorn cad.app:app --host 0.0.0.0 --port $PORT` |
+| **Start Command** | `python -m cad` |
 | Health check | `/api/health` |
 
 No `--reload`. No `pip install` in Start Command. `$PORT` is required (do not hardcode `8000`).
