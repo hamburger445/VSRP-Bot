@@ -1,10 +1,10 @@
 {
   "seq": {
     "SET": 14,
-    "cad_audit": 9,
-    "cad_dm_codes": 1,
+    "cad_audit": 10,
+    "cad_dm_codes": 2,
     "cad_oauth_tokens": 1,
-    "cad_outbox": 1,
+    "cad_outbox": 2,
     "cad_users": 1,
     "users": 8
   },
@@ -102,15 +102,32 @@
         "entity_id": "1391201462259810354",
         "entity_type": "cad_users",
         "id": 9
+      },
+      {
+        "action": "dm_code_requested",
+        "actor_id": 1391201462259810354,
+        "details_json": null,
+        "entity_id": "1391201462259810354",
+        "entity_type": "cad_users",
+        "id": 10
       }
     ],
+    "cad_bolos": [],
     "cad_calls": [],
+    "cad_characters": [],
     "cad_dm_codes": [
       {
         "code_hash": "7bc3be10eea57e193e3ea4bebd9ee2583a3e0ba404aa90e38aa177c9f6e37748",
+        "consumed_at": "2026-10-26T23:28:03.227508+00:00",
         "discord_user_id": 1391201462259810354,
         "expires_at": "2026-10-26T23:36:24.127413+00:00",
         "id": 1
+      },
+      {
+        "code_hash": "43a5f8b509414c58c65baa7e15d42fcc669b24a825838583e93f25b275da9bdc",
+        "discord_user_id": 1391201462259810354,
+        "expires_at": "2026-10-26T23:38:03.227603+00:00",
+        "id": 2
       }
     ],
     "cad_oauth_tokens": [
@@ -128,6 +145,11 @@
         "id": 1,
         "kind": "dm_code",
         "payload_json": "{\"user_id\": 1391201462259810354, \"code\": \"884786\"}"
+      },
+      {
+        "id": 2,
+        "kind": "dm_code",
+        "payload_json": "{\"user_id\": 1391201462259810354, \"code\": \"862685\"}"
       }
     ],
     "cad_pcrs": [],
@@ -179,7 +201,7 @@
         "discord_user_id": 1391201462259810354,
         "expires_at": "2026-10-27T11:13:20.473186+00:00",
         "id": "fd287743-fa6f-483c-aa21-bb821ee3c467",
-        "last_seen_at": "2026-10-26T23:26:24.126871+00:00",
+        "last_seen_at": "2026-10-26T23:28:03.227141+00:00",
         "token_hash": "0c9b27623113411d4ebf7015ed837b2727f2bd8c02f7942468c17f73832b7d60"
       }
     ],
@@ -201,12 +223,17 @@
         "username": "mr.kujo1"
       }
     ],
+    "citation_tickets": [],
     "guild_settings": [],
+    "shift_sessions": [],
+    "trailers": [],
     "users": [
       {
         "id": 1,
         "user_id": 1391201462259810354
       }
-    ]
+    ],
+    "vehicles": [],
+    "warrants": []
   }
 }
