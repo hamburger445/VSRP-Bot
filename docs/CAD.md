@@ -55,16 +55,31 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ## Render
 
-`render.yaml` deploys a **Docker** web service (Python + Node in one image). Native Python on Render does not include `npm`, which caused the previous crash.
+**Do not put pip and uvicorn in the same Start Command.** `--reload` is local-only. Render ran this and crashed:
 
-If this service was created as Python:
+```
+pip install -r requirements.txt -r requirements-cad.txt uvicorn cad.app:app --reload --port 8000
+```
 
-1. Dashboard → **Settings** → set **Language / Runtime** to **Docker**, Dockerfile path `./Dockerfile`, or
-2. Create a new Blueprint from `render.yaml`.
+### If the service is native Python (current log)
 
-Required env: `DATABASE_URL` (same Postgres as the bot). Render `postgres://` URLs work. Health check is `/api/health` and returns HTTP 200 while the process is up.
+Dashboard → Settings:
 
-Do **not** run `python bot.py` on this service while the panel bot is online.
+| Field | Value |
+|-------|--------|
+| **Build Command** | `pip install -r requirements.txt -r requirements-cad.txt` |
+| **Start Command** | `uvicorn cad.app:app --host 0.0.0.0 --port $PORT` |
+| Health check | `/api/health` |
+
+No `--reload`. No `pip install` in Start Command. `$PORT` is required (do not hardcode `8000`).
+
+The UI will be missing on a Python service (no Node/npm). Use Docker for the full website.
+
+### Docker (UI + API)
+
+Settings → Runtime **Docker**, Dockerfile `./Dockerfile`. The image already runs uvicorn on `$PORT`.
+
+Required env: `DATABASE_URL` (same Postgres as the bot). Do **not** run `python bot.py` on this service while the panel bot is online.
 
 ## Discord commands (after `/sync`)
 
