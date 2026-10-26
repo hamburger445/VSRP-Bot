@@ -58,6 +58,8 @@ roles:
     fire3: 1556146295176036372
     police1: 1244720480011812977
     police2: 1244720384457052262
+    state_police: 0
+    rural_pd: 0
     ems: 1244719576206282805
     dot: 1513623179854217327
     dispatch: 1513622907849539696
@@ -67,6 +69,11 @@ roles:
     fire3: Max Meadows Volunteer Fire Department
     police1: Wythe County Sheriffs Office
     police2: Wytheville Police Department
+    state_police: Department of State Police
+    rural_pd: Rural Retreat Police Department
+    ems: Emergency Medical Services
+    dot: Department of Transportation
+    dispatch: Dispatch / Communications
 
 channels:
   session_announcements: 1513625134106153011

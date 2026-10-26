@@ -15,6 +15,7 @@ from datetime import datetime
 
 from cad.security import hash_token, utcnow
 from cad.settings import get_settings
+from utils.cad_departments import memberships
 from utils.cad_permissions import compute_permissions, needs_dm_verify
 
 COOKIE_NAME = "vsrp_cad"
@@ -138,6 +139,12 @@ async def current_session(
         overrides=overrides,
     )
     dm_verified = row.get("dm_verified_at")
+    depts = memberships(
+        main_roles=_json_int_list(row.get("main_roles")),
+        department_roles=settings.department_roles,
+        department_names=settings.department_names,
+        is_admin="cad.admin" in perms,
+    )
     user = {
         "discord_user_id": int(row["discord_user_id"]),
         "username": row.get("username"),
@@ -149,6 +156,7 @@ async def current_session(
             settings.require_dm_verify and needs_dm_verify(perms) and not dm_verified
         ),
         "in_main_guild": bool(row.get("in_main_guild")),
+        "departments": depts,
     }
     request.state.cad_user = user
     return user
@@ -160,7 +168,10 @@ def require_perm(*needed: str):
         if "cad.admin" in have:
             return user
         if not any(p in have for p in needed):
-            raise HTTPException(403, "Permission denied")
+            raise HTTPException(
+                403,
+                "Your Discord roles on the main server do not grant this CAD department or feature.",
+            )
         settings = get_settings()
         if (
             settings.require_dm_verify

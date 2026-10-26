@@ -104,9 +104,12 @@ class CadSettings:
         self.pd_guild_id = _int_env("CAD_PD_GUILD_ID", int(servers.get("pd", {}).get("id") or 0))
         self.owners = _csv_ints("CAD_OWNER_IDS") or [int(x) for x in owners if x]
         self.department_roles: dict[str, int] = {}
-        for key in ("fire1", "fire2", "fire3", "police1", "police2", "ems", "dot", "dispatch"):
+        for key in ("fire1", "fire2", "fire3", "police1", "police2", "state_police", "rural_pd", "ems", "dot", "dispatch"):
             env_name = f"CAD_ROLE_{key.upper()}"
             self.department_roles[key] = _int_env(env_name, int(depts.get(key) or 0))
+        self.department_names: dict[str, str] = {
+            str(k): str(v) for k, v in (roles.get("department_names") or {}).items() if v
+        }
         reviewer = apps.get("reviewer_role_ids") or []
         extra = apps.get("reviewer_role_id")
         ids = list(reviewer)

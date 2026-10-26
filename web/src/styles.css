@@ -149,6 +149,13 @@ button.ghost { background: transparent; }
   max-width: 420px;
 }
 .search input { width: 100%; background: var(--bg); }
+.dept-select {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+}
+.dept-select select { max-width: 240px; }
 .userchip {
   display: flex;
   align-items: center;
@@ -165,7 +172,8 @@ button.ghost { background: transparent; }
   font-size: 11px;
   font-weight: 700;
 }
-.main { padding: 20px 22px 40px; overflow: auto; }
+.main { padding: 24px 28px 48px; overflow: auto; }
+.stack { display: flex; flex-direction: column; gap: 20px; }
 .page-head {
   display: flex;
   justify-content: space-between;
@@ -173,13 +181,12 @@ button.ghost { background: transparent; }
   gap: 12px;
   margin-bottom: 16px;
 }
-.page-actions, .toolbar, .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.toolbar, .row { margin: 0 0 12px; }
+.page-actions, .toolbar, .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.toolbar, .row { margin: 0; }
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
 }
 .stat, .panel, .card {
   background: var(--panel);
@@ -189,7 +196,8 @@ button.ghost { background: transparent; }
 .stat { padding: 14px; }
 .stat-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
 .stat-value { font-family: var(--mono); font-size: 26px; font-variant-numeric: tabular-nums; margin-top: 4px; }
-.panel-head, .panel-body { padding: 12px 14px; }
+.panel-head, .panel-body { padding: 16px 18px; }
+.panel-body { display: flex; flex-direction: column; gap: 14px; }
 .panel-head {
   display: flex;
   justify-content: space-between;
@@ -198,9 +206,39 @@ button.ghost { background: transparent; }
 }
 .grid-2 {
   display: grid;
-  grid-template-columns: 1.3fr 0.9fr;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.95fr);
+  gap: 20px;
+  align-items: start;
 }
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+}
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field.span-2 { grid-column: 1 / -1; }
+.field label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.field input, .field select, .field textarea { width: 100%; }
+.field textarea { min-height: 72px; resize: vertical; }
+.auto { font-size: 10px; color: var(--info); letter-spacing: 0.04em; }
+.legal-doc {
+  background: #f4f1ea;
+  color: #1a1a1a;
+  border: 1px solid #c4b8a5;
+  border-radius: 4px;
+  padding: 24px 28px;
+}
+.legal-doc h2, .legal-doc h3 { color: #1a1a1a; letter-spacing: 0.04em; }
+.legal-doc h2 { text-align: center; font-size: 18px; margin-bottom: 8px; }
+.legal-doc h3 { margin: 18px 0 8px; border-bottom: 1px solid #c4b8a5; padding-bottom: 4px; }
+.legal-doc .field label { color: #5c5346; }
+.legal-doc input, .legal-doc select, .legal-doc textarea {
+  background: #fff;
+  color: #1a1a1a;
+  border-color: #c4b8a5;
+}
+.checks { display: flex; flex-wrap: wrap; gap: 12px 18px; }
+.checks label { display: flex; gap: 6px; align-items: center; text-transform: none; letter-spacing: 0; font-size: 13px; color: inherit; }
 .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); }
 table { width: 100%; border-collapse: collapse; background: var(--panel); }
 th, td {
@@ -289,9 +327,15 @@ th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background
   .sidebar { position: fixed; z-index: 20; transform: translateX(-105%); width: 248px; }
   .sidebar.open { transform: none; }
   .mobile-toggle { display: inline-flex; }
-  .grid-2 { grid-template-columns: 1fr; }
+  .grid-2, .form-grid { grid-template-columns: 1fr; }
+  .field.span-2 { grid-column: auto; }
   .userchip span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
+}
+@media print {
+  .sidebar, .topbar, .page-actions, .toolbar, button { display: none !important; }
+  .app-shell { display: block; }
+  .legal-doc { box-shadow: none; }
 }

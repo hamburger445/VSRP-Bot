@@ -8,16 +8,22 @@ _CASE_STATE_KEY = "leo_case_sequence"
 
 
 async def allocate_case_number_on_conn(conn: asyncpg.Connection) -> str:
+    # Seed -1 so the first UPDATE yields 0 (displayed 0000). Existing counters
+    # are left in place and only incremented.
+    await conn.execute(
+        "INSERT INTO bot_state (key, value) VALUES ($1, '-1') ON CONFLICT (key) DO NOTHING",
+        _CASE_STATE_KEY,
+    )
     row = await conn.fetchrow(
         """
-        INSERT INTO bot_state (key, value) VALUES ($1, '1')
-        ON CONFLICT (key) DO UPDATE
-        SET value = (COALESCE(NULLIF(bot_state.value, '')::int, 0) + 1)::text
+        UPDATE bot_state
+        SET value = (value::int + 1)::text
+        WHERE key = $1
         RETURNING value
         """,
         _CASE_STATE_KEY,
     )
-    n = int(row["value"]) if row else 1
+    n = int(row["value"]) if row else 0
     return f"{n:04d}"
 
 

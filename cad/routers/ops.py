@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from cad.db import audit, connection, enqueue_outbox, row_to_dict, rows_to_dicts
 from cad.deps import current_session, require_perm
-from utils.leo_forms import citation_summary, warrant_form_to_reason
+from utils.leo_forms import CITATION_AGENCIES, COURT_TYPES, citation_summary, warrant_form_to_reason
 from utils.leo_records import (
     clear_warrant,
     create_citation,
@@ -30,6 +30,15 @@ def _json_safe(row: dict | None) -> dict | None:
             out[k] = v.isoformat()
         else:
             out[k] = v
+    for key in ("form_json", "serve_form_json"):
+        raw = out.get(key)
+        if isinstance(raw, str):
+            try:
+                out[key.replace("_json", "")] = json.loads(raw)
+            except json.JSONDecodeError:
+                out[key.replace("_json", "")] = {}
+        elif isinstance(raw, dict):
+            out[key.replace("_json", "")] = raw
     return out
 
 
@@ -215,6 +224,54 @@ async def search_vehicles(
     return {"results": [_json_safe(dict(r)) for r in rows]}
 
 
+@router.get("/catalog")
+async def catalog(user: dict = Depends(current_session)):
+    charges = []
+    async with connection() as conn:
+        try:
+            rows = await conn.fetch("SELECT code, description, discipline FROM cad_charges ORDER BY code")
+            charges = [_json_safe(dict(r)) for r in rows]
+        except Exception:
+            charges = []
+    if not charges:
+        charges = [
+            {"code": "46.2-862", "description": "Reckless driving; exceeding speed limit", "discipline": "police"},
+            {"code": "46.2-870", "description": "Maximum speed limits", "discipline": "police"},
+            {"code": "18.2-57", "description": "Assault and battery", "discipline": "police"},
+        ]
+    return {
+        "agencies": list(CITATION_AGENCIES),
+        "courts": list(COURT_TYPES),
+        "counties": ["WYTHE"],
+        "charges": charges,
+        "departments": user.get("departments") or [],
+    }
+
+
+@router.get("/officer/profile")
+async def officer_profile(user: dict = Depends(current_session)):
+    unit = None
+    async with connection() as conn:
+        unit = await conn.fetchrow(
+            "SELECT * FROM cad_units WHERE discord_user_id = $1 ORDER BY id DESC LIMIT 1",
+            int(user["discord_user_id"]),
+        )
+    depts = user.get("departments") or []
+    agency = depts[0]["agency"] if depts else ""
+    name = user.get("global_name") or user.get("username") or ""
+    unit_d = dict(unit) if unit else {}
+    callsign = unit_d.get("callsign") or ""
+    return {
+        "discord_user_id": user["discord_user_id"],
+        "name": name,
+        "callsign": callsign,
+        "agency": agency,
+        "issued_by": " ".join(x for x in [name, callsign, agency] if x),
+        "departments": depts,
+        "unit": _json_safe(unit_d) if unit_d else None,
+    }
+
+
 class CitationBody(BaseModel):
     subject_id: int
     fine: int = Field(ge=0, le=100000)
@@ -237,6 +294,15 @@ async def list_citations(
                 "SELECT * FROM citation_tickets ORDER BY created_at DESC LIMIT 100"
             )
     return {"results": [_json_safe(dict(r)) for r in rows]}
+
+
+@router.get("/citations/{ticket_id}")
+async def get_citation(ticket_id: int, user: dict = Depends(require_perm("citations.manage", "records.read", "civilian.self"))):
+    async with connection() as conn:
+        row = await conn.fetchrow("SELECT * FROM citation_tickets WHERE id = $1", ticket_id)
+    if not row:
+        raise HTTPException(404, "Citation not found")
+    return _json_safe(dict(row))
 
 
 @router.post("/citations")
@@ -306,17 +372,43 @@ class WarrantBody(BaseModel):
 @router.get("/warrants")
 async def list_warrants(
     subject_id: int | None = None,
+    q: str | None = None,
+    status: str | None = None,
     user: dict = Depends(require_perm("warrants.manage", "records.read")),
 ):
     async with connection() as conn:
         if subject_id:
             rows = await conn.fetch(
-                "SELECT * FROM warrants WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100",
+                "SELECT * FROM warrants WHERE user_id = $1 ORDER BY created_at DESC LIMIT 200",
                 subject_id,
             )
         else:
-            rows = await conn.fetch("SELECT * FROM warrants ORDER BY created_at DESC LIMIT 100")
-    return {"results": [_json_safe(dict(r)) for r in rows]}
+            rows = await conn.fetch("SELECT * FROM warrants ORDER BY created_at DESC LIMIT 200")
+    results = [_json_safe(dict(r)) for r in rows]
+    if status:
+        want = status.lower()
+        results = [r for r in results if str(r.get("status") or "").lower() == want]
+    if q:
+        needle = q.lower()
+        results = [
+            r
+            for r in results
+            if needle in str(r.get("case_number") or "").lower()
+            or needle in str(r.get("reason") or "").lower()
+            or needle in str((r.get("form") or {}).get("accused") or "").lower()
+            or needle in str((r.get("form") or {}).get("warrant_type") or "").lower()
+            or needle in str((r.get("form") or {}).get("jurisdiction") or "").lower()
+        ]
+    return {"results": results}
+
+
+@router.get("/warrants/{warrant_id}")
+async def get_warrant(warrant_id: int, user: dict = Depends(require_perm("warrants.manage", "records.read"))):
+    async with connection() as conn:
+        row = await conn.fetchrow("SELECT * FROM warrants WHERE id = $1", warrant_id)
+    if not row:
+        raise HTTPException(404, "Warrant not found")
+    return _json_safe(dict(row))
 
 
 @router.post("/warrants")
@@ -362,6 +454,11 @@ async def serve(
 ):
     serve_data = body.model_dump() if body else {}
     async with connection() as conn:
+        existing = await conn.fetchrow("SELECT * FROM warrants WHERE id = $1", warrant_id)
+        if not existing:
+            raise HTTPException(404, "Warrant not found")
+        if str(existing.get("status") or "").lower() == "served":
+            raise HTTPException(409, "This warrant has already been served. Original issue data was not changed.")
         async with conn.transaction():
             row = await serve_warrant(warrant_id, int(user["discord_user_id"]), serve_data, conn)
             if not row:

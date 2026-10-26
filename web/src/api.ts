@@ -45,6 +45,15 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
+export type CadDepartment = {
+  key: string;
+  name: string;
+  agency: string;
+  kind: string;
+  permission: string;
+  role_id: number;
+};
+
 export type Me = {
   discord_user_id: number;
   username: string;
@@ -52,4 +61,5 @@ export type Me = {
   permissions: string[];
   needs_dm_verify: boolean;
   dm_verified_at?: string | null;
+  departments?: CadDepartment[];
 };

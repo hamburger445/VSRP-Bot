@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Activity,
   Bell,
   Car,
   ClipboardList,
+  FileText,
   FileWarning,
   Flame,
   LayoutDashboard,
@@ -20,6 +21,7 @@ import {
   Users,
 } from "lucide-react";
 import { Me, api } from "./api";
+import { CitationForm, ServeWarrantForm, WarrantIssueForm } from "./forms";
 import { DataTable, EmptyState, PageHeader, Panel, StatCard, StatusBadge, Toolbar } from "./ui";
 
 function has(me: Me | null, ...keys: string[]) {
@@ -75,7 +77,10 @@ const NAV = [
   {
     label: "Records",
     items: [
+      { to: "/citations", title: "Uniform Summons", icon: FileText, need: ["citations.manage"] },
       { to: "/warrants", title: "Warrants", icon: FileWarning, need: ["warrants.manage", "records.read"] },
+      { to: "/warrants/new", title: "Issue Warrant", icon: FileWarning, need: ["warrants.manage"] },
+      { to: "/warrants/serve", title: "Served Warrant", icon: FileWarning, need: ["warrants.manage"] },
       { to: "/bolos", title: "BOLOs", icon: Siren, need: ["bolos.manage", "records.read"] },
       { to: "/shifts", title: "Shifts", icon: Users, need: ["shifts.read"] },
       { to: "/applications", title: "Applications", icon: ClipboardList, need: ["applications.review"] },
@@ -177,12 +182,30 @@ function Verify({ me }: { me: Me }) {
   );
 }
 
+function Gate({ me, need, children }: { me: Me; need: string[]; children: ReactNode }) {
+  if (!need.length || has(me, ...need)) return <>{children}</>;
+  return (
+    <div className="stack">
+      <PageHeader title="Access denied" />
+      <p className="err">Your Discord roles on the main server do not grant this CAD department or feature.</p>
+    </div>
+  );
+}
+
 function Shell({ me }: { me: Me }) {
   const loc = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [live, setLive] = useState(true);
+  const depts = me.departments || [];
+  const [dept, setDept] = useState(() => {
+    try {
+      return sessionStorage.getItem("cad_dept") || depts[0]?.key || "";
+    } catch {
+      return depts[0]?.key || "";
+    }
+  });
   useEffect(() => {
     api("/api/health")
       .then((h: any) => setLive(Boolean(h.database)))
@@ -218,7 +241,7 @@ function Shell({ me }: { me: Me }) {
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    end={item.to === "/"}
+                    end={item.to === "/" || item.to === "/warrants"}
                     className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
                     onClick={() => setOpen(false)}
                     title={item.title}
@@ -253,6 +276,28 @@ function Shell({ me }: { me: Me }) {
             <i />
             {live ? "Systems online" : "Degraded"}
           </span>
+          {depts.length > 0 && (
+            <label className="dept-select">
+              <span className="muted tiny">Department</span>
+              <select
+                value={dept}
+                onChange={(e) => {
+                  setDept(e.target.value);
+                  try {
+                    sessionStorage.setItem("cad_dept", e.target.value);
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                {depts.map((d) => (
+                  <option key={d.key} value={d.key}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <Bell size={16} className="muted" />
           <div className="userchip">
             <div className="avatar">{initials}</div>
@@ -282,19 +327,22 @@ function Shell({ me }: { me: Me }) {
           )}
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/civilian" element={<Civilian />} />
-            <Route path="/mdt" element={<Mdt />} />
-            <Route path="/mdt/people/:id" element={<Person />} />
-            <Route path="/dispatch" element={<Dispatch />} />
-            <Route path="/fire" element={<DeptCalls path="/api/fire/calls" title="Fire" />} />
-            <Route path="/ems" element={<Ems />} />
-            <Route path="/dot" element={<Dot />} />
+            <Route path="/civilian" element={<Gate me={me} need={["civilian.self"]}><Civilian /></Gate>} />
+            <Route path="/mdt" element={<Gate me={me} need={["mdt.police"]}><Mdt /></Gate>} />
+            <Route path="/mdt/people/:id" element={<Gate me={me} need={["mdt.police", "records.read"]}><Person /></Gate>} />
+            <Route path="/dispatch" element={<Gate me={me} need={["dispatch.operate"]}><Dispatch /></Gate>} />
+            <Route path="/fire" element={<Gate me={me} need={["mdt.fire"]}><DeptCalls path="/api/fire/calls" title="Fire" /></Gate>} />
+            <Route path="/ems" element={<Gate me={me} need={["mdt.ems"]}><Ems /></Gate>} />
+            <Route path="/dot" element={<Gate me={me} need={["mdt.dot"]}><Dot /></Gate>} />
             <Route path="/map" element={<MapPage />} />
-            <Route path="/warrants" element={<Warrants />} />
-            <Route path="/bolos" element={<Bolos />} />
-            <Route path="/shifts" element={<Shifts />} />
-            <Route path="/applications" element={<Applications />} />
-            <Route path="/admin" element={<Admin />} />
+            <Route path="/citations" element={<Gate me={me} need={["citations.manage"]}><CitationForm /></Gate>} />
+            <Route path="/warrants" element={<Gate me={me} need={["warrants.manage", "records.read"]}><Warrants /></Gate>} />
+            <Route path="/warrants/new" element={<Gate me={me} need={["warrants.manage"]}><WarrantIssueForm /></Gate>} />
+            <Route path="/warrants/serve" element={<Gate me={me} need={["warrants.manage"]}><ServeWarrantForm /></Gate>} />
+            <Route path="/bolos" element={<Gate me={me} need={["bolos.manage", "records.read"]}><Bolos /></Gate>} />
+            <Route path="/shifts" element={<Gate me={me} need={["shifts.read"]}><Shifts /></Gate>} />
+            <Route path="/applications" element={<Gate me={me} need={["applications.review"]}><Applications /></Gate>} />
+            <Route path="/admin" element={<Gate me={me} need={["cad.admin"]}><Admin /></Gate>} />
           </Routes>
         </div>
       </div>
@@ -312,7 +360,7 @@ function Dashboard() {
   if (!data) return <p className="muted">Loading dashboard…</p>;
   const empty = !data.open_calls && !data.pending_calls && !(data.recent_calls || []).length;
   return (
-    <>
+    <div className="stack">
       <PageHeader kicker="Overview" title="Operations dashboard" />
       {empty && (
         <EmptyState
@@ -341,7 +389,7 @@ function Dashboard() {
           empty="No calls in the database."
         />
       </Panel>
-    </>
+    </div>
   );
 }
 
@@ -355,7 +403,7 @@ function Civilian() {
   if (data.error) return <p className="err">Could not load civilian file.</p>;
   const uid = data.user?.user_id;
   return (
-    <>
+    <div className="stack">
       <PageHeader kicker="Civilian" title="Civilian portal" />
       <p className="muted">Discord ID {uid}. Fictional character names are not proof of identity.</p>
       <Panel title="Characters">
@@ -398,7 +446,7 @@ function Civilian() {
       <Panel title="Warrants">
         <DataTable rows={data.warrants} cols={[["case_number", "Case"], ["reason", "Reason"], ["status", "Status"]]} empty="No warrants." />
       </Panel>
-    </>
+    </div>
   );
 }
 
@@ -407,14 +455,20 @@ function Mdt() {
   const [plate, setPlate] = useState("");
   const [people, setPeople] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
-  const [subject, setSubject] = useState("");
-  const [fine, setFine] = useState("50");
-  const [charge, setCharge] = useState("");
-  const [msg, setMsg] = useState("");
   const nav = useNavigate();
   return (
-    <>
-      <PageHeader kicker="Police" title="Mobile Data Terminal" />
+    <div className="stack">
+      <PageHeader
+        kicker="Police"
+        title="Mobile Data Terminal"
+        actions={
+          <>
+            <NavLink to="/citations">Uniform summons</NavLink>
+            <NavLink to="/warrants/new">Issue warrant</NavLink>
+            <NavLink to="/warrants/serve">Record service</NavLink>
+          </>
+        }
+      />
       <Panel title="Lookups">
         <Toolbar>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or Discord ID" />
@@ -445,72 +499,7 @@ function Mdt() {
         ))}
         <DataTable rows={vehicles} cols={[["plate", "Plate"], ["make", "Make"], ["model", "Model"], ["user_id", "Owner"]]} empty={plate ? "No vehicles." : "Search a plate."} />
       </Panel>
-      <Panel title="Issue citation">
-        <Toolbar>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject Discord ID" />
-          <input value={fine} onChange={(e) => setFine(e.target.value)} placeholder="Fine" />
-          <input value={charge} onChange={(e) => setCharge(e.target.value)} placeholder="Charge description" />
-          <button
-            className="primary"
-            type="button"
-            onClick={async () => {
-              try {
-                const row = await api<any>("/api/citations", {
-                  method: "POST",
-                  body: JSON.stringify({
-                    subject_id: Number(subject),
-                    fine: Number(fine),
-                    form: { charge_description: charge, va_code: "", court_type: "GDC" },
-                  }),
-                });
-                setMsg(`Citation ${row.case_number} issued. Discord delivery queued.`);
-              } catch (e: any) {
-                setMsg(e.message);
-              }
-            }}
-          >
-            Issue
-          </button>
-        </Toolbar>
-      </Panel>
-      <Panel title="Issue warrant">
-        <WarrantForm />
-        {msg && <p>{msg}</p>}
-      </Panel>
-    </>
-  );
-}
-
-function WarrantForm() {
-  const [subject, setSubject] = useState("");
-  const [reason, setReason] = useState("");
-  const [msg, setMsg] = useState("");
-  return (
-    <Toolbar>
-      <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject Discord ID" />
-      <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Charge / reason" />
-      <button
-        className="danger"
-        type="button"
-        onClick={async () => {
-          try {
-            const row = await api<any>("/api/warrants", {
-              method: "POST",
-              body: JSON.stringify({
-                subject_id: Number(subject),
-                form: { code_description: reason, warrant_type: "arrest" },
-              }),
-            });
-            setMsg(`Warrant ${row.case_number} created.`);
-          } catch (e: any) {
-            setMsg(e.message);
-          }
-        }}
-      >
-        Issue warrant
-      </button>
-      {msg && <span>{msg}</span>}
-    </Toolbar>
+    </div>
   );
 }
 
@@ -565,7 +554,7 @@ function Dispatch() {
   }, []);
   const pending = calls.filter((c) => c.status === "pending" || c.status === "new");
   return (
-    <>
+    <div className="stack">
       <PageHeader kicker="Dispatch" title="Live dispatch" />
       <Toolbar>
         <select value={disc} onChange={(e) => setDisc(e.target.value)}>
@@ -677,7 +666,7 @@ function Dispatch() {
           <Pager />
         </Panel>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -845,48 +834,77 @@ function MapPage() {
 
 function Warrants() {
   const [rows, setRows] = useState<any[]>([]);
-  const load = () => api<{ results: any[] }>("/api/warrants").then((r) => setRows(r.results));
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("");
+  const load = () => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (status) params.set("status", status);
+    const qs = params.toString();
+    return api<{ results: any[] }>(`/api/warrants${qs ? `?${qs}` : ""}`).then((r) => setRows(r.results));
+  };
   useEffect(() => {
     load();
   }, []);
   return (
-    <>
-      <PageHeader kicker="Records" title="Warrants" />
-      <Panel>
-        <WarrantForm />
-        {rows.map((w) => (
-          <div key={w.id} className="unit-row">
-            <span>
-              #{w.case_number} {w.reason} — <StatusBadge value={w.status} />
-            </span>
-            {w.active === 1 && (
-              <>
-                <button
-                  className="ok"
-                  type="button"
-                  onClick={async () => {
-                    await api(`/api/warrants/${w.id}/serve`, { method: "POST", body: "{}" });
-                    load();
-                  }}
-                >
-                  Serve
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await api(`/api/warrants/${w.id}/clear`, { method: "POST" });
-                    load();
-                  }}
-                >
-                  Clear
-                </button>
-              </>
-            )}
-          </div>
-        ))}
-        {!rows.length && <p className="muted">No warrants.</p>}
+    <div className="stack">
+      <PageHeader
+        kicker="Records"
+        title="Warrant file"
+        actions={
+          <>
+            <NavLink to="/warrants/new">Issue warrant</NavLink>
+            <NavLink to="/warrants/serve">Record service</NavLink>
+          </>
+        }
+      />
+      <Panel title="Search">
+        <Toolbar>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Case, accused, type, jurisdiction" />
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="served">Served</option>
+            <option value="cleared">Cleared</option>
+          </select>
+          <button type="button" onClick={() => load()}>
+            Filter
+          </button>
+        </Toolbar>
       </Panel>
-    </>
+      <Panel title="Results">
+        <DataTable
+          searchable
+          rows={rows}
+          cols={[
+            ["case_number", "Case"],
+            ["reason", "Accused / type"],
+            ["status", "Status"],
+            ["issued_by", "Issued by"],
+          ]}
+          empty="No warrants match those filters."
+        />
+        {rows
+          .filter((w) => w.active === 1 || w.active === true)
+          .map((w) => (
+            <div key={w.id} className="unit-row">
+              <span>
+                #{w.case_number} — <StatusBadge value={w.status} />
+              </span>
+              <NavLink to="/warrants/serve">Serve form</NavLink>
+              <button
+                type="button"
+                onClick={async () => {
+                  await api(`/api/warrants/${w.id}/clear`, { method: "POST" });
+                  load();
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          ))}
+      </Panel>
+    </div>
   );
 }
 

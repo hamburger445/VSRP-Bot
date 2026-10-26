@@ -79,7 +79,7 @@ def compute_permissions(
         perms.update({"records.read", "cad.supervisor", "shifts.read"})
 
     leo = _has_role(main_roles, main_perms, "leo") or any(
-        dept.get(k) in main_roles for k in ("police1", "police2")
+        dept.get(k) in main_roles for k in ("police1", "police2", "state_police", "rural_pd")
     )
     if leo:
         perms.update(

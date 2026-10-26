@@ -100,6 +100,14 @@ CAD data is stored at `data/cad/db.json` on the **`cad-data` branch** (not `main
 
 Citations and warrants created in CAD write the same `citation_tickets` / `warrants` rows as Discord. Channel posts and DMs wait in `cad_outbox` until the bot delivers them.
 
+## Department access
+
+CAD permissions come from Discord roles on the **main** guild (`roles.departments` in `config.yaml`, overridable with `CAD_ROLE_POLICE1`, `CAD_ROLE_STATE_POLICE`, etc.). Members do not join a second CAD-only server. `/api/auth/me` returns `departments` for the department selector. Every write route uses `require_perm` on the server; hiding a nav link is not authorization.
+
+Citations and warrants share one persisted counter (`bot_state.leo_case_sequence`). The first unused number is **0000**. Display always pads to four digits. Allocation is `INSERT … ON CONFLICT` inside a database transaction so concurrent officers cannot receive the same number on Postgres. GitHub JSON storage serializes writes per process and is not a multi-instance lock.
+
+Uniform summons, warrant of arrest/search, and served-warrant screens save `form_json` / `serve_form_json` on the existing `citation_tickets` and `warrants` tables. Print uses the browser print stylesheet (no separate PDF library). Roleplay layouts are not official Commonwealth of Virginia forms.
+
 ## Limitations
 
 - No live GPS (manual map positions only)

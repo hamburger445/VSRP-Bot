@@ -455,6 +455,8 @@ def run(state: dict[str, Any], sql: str, args: tuple = (), mode: str = "fetch") 
                     parts = [p.strip() for p in inner.split(",")]
                     cur = row.get(_col(parts[0]))
                     row[key] = cur if cur is not None else _subst_expr(parts[1], args)
+                elif "::int" in val.lower() or "+ 1" in val:
+                    row[key] = str(int(row.get(key) or 0) + 1)
                 else:
                     row[key] = _subst_expr(val, args)
             updated.append(row)
