@@ -67,7 +67,7 @@ Dashboard → Settings:
 
 | Field | Value |
 |-------|--------|
-| **Build Command** | `pip install -r requirements.txt -r requirements-cad.txt` |
+| **Build Command** | `pip install -r requirements.txt` |
 | **Start Command** | `python -m cad` |
 | Health check | `/api/health` |
 
