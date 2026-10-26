@@ -68,7 +68,7 @@ async def discord_login(request: Request):
         "response_type": "code",
         "scope": "identify guilds.members.read",
         "state": state,
-        "prompt": "consent",
+        "prompt": "login",
     }
     redir = RedirectResponse(f"{OAUTH_AUTHORIZE}?{urlencode(params)}")
     redir.set_cookie(
@@ -216,11 +216,7 @@ async def discord_callback(
         f"<script>location.replace({json.dumps(dest)});</script>"
         "</body></html>"
     )
-    resp = HTMLResponse(html, headers={"Cache-Control": "no-store"})
-    kw = _cookie_kwargs(origin, settings)
-    resp.set_cookie(COOKIE_NAME, raw_token, **kw)
-    resp.set_cookie(CSRF_COOKIE, csrf, httponly=False, secure=kw["secure"], samesite=kw["samesite"], path="/", max_age=kw["max_age"])
-    return resp
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/me")

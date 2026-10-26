@@ -13,13 +13,20 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers["X-CSRF"] = csrf;
   }
   try {
-    const tok = localStorage.getItem("vsrp_cad") || sessionStorage.getItem("vsrp_cad");
+    const tok = sessionStorage.getItem("vsrp_cad");
     if (tok && !headers.Authorization) headers.Authorization = "Bearer " + tok;
   } catch {
     /* private mode */
   }
   const res = await fetch(path, { ...init, headers, credentials: "include" });
   if (res.status === 401) {
+    try {
+      sessionStorage.removeItem("vsrp_cad");
+      localStorage.removeItem("vsrp_cad");
+      document.cookie = "vsrp_cad=; Path=/; Max-Age=0";
+    } catch {
+      /* ignore */
+    }
     throw Object.assign(new Error("unauthenticated"), { status: 401 });
   }
   if (!res.ok) {

@@ -11,19 +11,26 @@ function has(me: Me | null, ...keys: string[]) {
 function takeSessionFromHash() {
   const hash = window.location.hash || "";
   const m = /(?:^[#&]|#)cad=([^&]+)/.exec(hash);
-  if (!m) return;
+  if (!m) return false;
   try {
-    const tok = decodeURIComponent(m[1]);
-    localStorage.setItem("vsrp_cad", tok);
-    sessionStorage.setItem("vsrp_cad", tok);
+    sessionStorage.setItem("vsrp_cad", decodeURIComponent(m[1]));
+    localStorage.removeItem("vsrp_cad");
   } catch {
     /* ignore */
   }
-  const csrf = /[?&#]csrf=([^&]+)/.exec(hash);
-  if (csrf) {
-    document.cookie = "vsrp_cad_csrf=" + decodeURIComponent(csrf[1]) + "; Path=/; SameSite=Lax; Secure";
-  }
   window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  return true;
+}
+
+function startDiscordLogin() {
+  try {
+    sessionStorage.removeItem("vsrp_cad");
+    localStorage.removeItem("vsrp_cad");
+  } catch {
+    /* ignore */
+  }
+  document.cookie = "vsrp_cad=; Path=/; Max-Age=0";
+  window.location.href = "/api/auth/discord/login";
 }
 
 export default function App() {
@@ -31,7 +38,10 @@ export default function App() {
   useEffect(() => {
     takeSessionFromHash();
     api<Me>("/api/auth/me")
-      .then(setMe)
+      .then((user) => {
+        if (!user?.discord_user_id) setMe(null);
+        else setMe(user);
+      })
       .catch(() => setMe(null));
   }, []);
   if (me === undefined) return <div className="main">Loading CAD…</div>;
@@ -52,10 +62,10 @@ function Login() {
           VSRP Operations
         </p>
         <h2 style={{ marginTop: 8 }}>Computer-Aided Dispatch</h2>
-        <p className="muted">Sign in with the Discord account on the main roleplay server.</p>
-        <a href="/api/auth/discord/login">
-          <button className="primary">Continue with Discord</button>
-        </a>
+        <p className="muted">Sign in with the Discord account on the main roleplay server. CAD will not open until Discord authorizes you.</p>
+        <button className="primary" type="button" onClick={startDiscordLogin}>
+          Continue with Discord
+        </button>
       </div>
     </div>
   );
