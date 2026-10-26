@@ -49,6 +49,8 @@ def resolve_public_url() -> str:
 def origin_from_request(request) -> str:
     host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
     proto = (request.headers.get("x-forwarded-proto") or getattr(request.url, "scheme", "") or "https").split(",")[0].strip()
+    if os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL"):
+        proto = "https"
     if host and not _is_loopback(host):
         return f"{proto}://{host}".rstrip("/")
     return get_settings().public_url

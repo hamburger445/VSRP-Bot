@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import logging
+
 from fastapi import Cookie, Depends, HTTPException, Request
+
+log = logging.getLogger("vsrp_bot.cad.auth")
 
 from datetime import datetime
 
@@ -66,6 +70,11 @@ async def current_session(
 ) -> dict[str, Any]:
     raw = vsrp_cad or request.cookies.get(COOKIE_NAME)
     if not raw:
+        auth = request.headers.get("authorization") or ""
+        if auth.lower().startswith("bearer "):
+            raw = auth[7:].strip()
+    if not raw:
+        log.info("CAD /me has no session cookie or bearer token")
         raise HTTPException(401, "Not authenticated")
     from cad.db import connection
 

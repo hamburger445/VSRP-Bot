@@ -45,9 +45,9 @@ class TotpBody(BaseModel):
 def _cookie_kwargs(origin: str, settings) -> dict:
     secure = origin.startswith("https://")
     return {
-        "httponly": True,
+        "httponly": False,
         "secure": secure,
-        "samesite": "lax",
+        "samesite": "none" if secure else "lax",
         "path": "/",
         "max_age": settings.session_max_days * 86400,
     }
@@ -209,32 +209,40 @@ async def discord_callback(
             await audit(conn, uid, "login", "session", str(session_id), {"via": "oauth2"})
 
     dest = f"{origin}/"
-    # 200 HTML, not 302: browsers often drop Set-Cookie on OAuth redirect responses.
-    resp = HTMLResponse(
-        "<!doctype html><html><head>"
-        f'<meta http-equiv="refresh" content="0;url={dest}">'
-        "</head><body>Signing in…"
-        f"<script>location.replace({json.dumps(dest)});</script>"
-        "</body></html>",
-        headers={"Cache-Control": "no-store"},
-    )
+    max_age = settings.session_max_days * 86400
+    secure_js = "true" if origin.startswith("https://") else "false"
+    # Set the session in JS on this first-party page. Server Set-Cookie after Discord
+    # is treated as a cross-site response and Chrome drops it.
+    html = f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>Signing in</title></head>
+<body>
+<p>Signing in…</p>
+<script>
+(function() {{
+  var token = {json.dumps(raw_token)};
+  var csrf = {json.dumps(csrf)};
+  var dest = {json.dumps(dest)};
+  var maxAge = {max_age};
+  var secure = {secure_js};
+  try {{
+    localStorage.setItem("vsrp_cad", token);
+    sessionStorage.setItem("vsrp_cad", token);
+  }} catch (e) {{}}
+  var bits = "{COOKIE_NAME}=" + encodeURIComponent(token) + "; Path=/; Max-Age=" + maxAge + "; SameSite=Lax";
+  if (secure) bits += "; Secure";
+  document.cookie = bits;
+  bits = "{CSRF_COOKIE}=" + encodeURIComponent(csrf) + "; Path=/; Max-Age=" + maxAge + "; SameSite=Lax";
+  if (secure) bits += "; Secure";
+  document.cookie = bits;
+  location.replace(dest);
+}})();
+</script>
+</body></html>
+"""
+    resp = HTMLResponse(html, headers={"Cache-Control": "no-store"})
     kw = _cookie_kwargs(origin, settings)
     resp.set_cookie(COOKIE_NAME, raw_token, **kw)
-    resp.set_cookie(
-        CSRF_COOKIE,
-        csrf,
-        httponly=False,
-        secure=kw["secure"],
-        samesite="lax",
-        path="/",
-        max_age=kw["max_age"],
-    )
-    resp.delete_cookie(
-        "cad_oauth_state",
-        path="/",
-        secure=kw["secure"],
-        samesite="lax",
-    )
+    resp.set_cookie(CSRF_COOKIE, csrf, httponly=False, secure=kw["secure"], samesite=kw["samesite"], path="/", max_age=kw["max_age"])
     return resp
 
 

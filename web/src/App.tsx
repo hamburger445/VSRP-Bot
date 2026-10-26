@@ -125,6 +125,12 @@ function Shell({ me }: { me: Me }) {
           style={{ marginTop: 16, width: "100%" }}
           onClick={async () => {
             await api("/api/auth/logout", { method: "POST" });
+            try {
+              localStorage.removeItem("vsrp_cad");
+              sessionStorage.removeItem("vsrp_cad");
+            } catch {
+              /* ignore */
+            }
             window.location.href = "/login";
           }}
         >

@@ -12,8 +12,20 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (csrf && init.method && init.method !== "GET") {
     headers["X-CSRF"] = csrf;
   }
+  try {
+    const tok = localStorage.getItem("vsrp_cad") || sessionStorage.getItem("vsrp_cad");
+    if (tok && !headers.Authorization) headers.Authorization = "Bearer " + tok;
+  } catch {
+    /* private mode */
+  }
   const res = await fetch(path, { ...init, headers, credentials: "include" });
   if (res.status === 401) {
+    try {
+      localStorage.removeItem("vsrp_cad");
+      sessionStorage.removeItem("vsrp_cad");
+    } catch {
+      /* ignore */
+    }
     throw Object.assign(new Error("unauthenticated"), { status: 401 });
   }
   if (!res.ok) {
