@@ -1,6 +1,26 @@
-import { useEffect, useState } from "react";
-import { NavLink, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import {
+  Activity,
+  Bell,
+  Car,
+  ClipboardList,
+  FileWarning,
+  Flame,
+  LayoutDashboard,
+  Map as MapIcon,
+  Menu,
+  PanelLeft,
+  Radio,
+  Search,
+  Shield,
+  Siren,
+  Truck,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { Me, api } from "./api";
+import { DataTable, EmptyState, PageHeader, Panel, StatCard, StatusBadge, Toolbar } from "./ui";
 
 function has(me: Me | null, ...keys: string[]) {
   if (!me) return false;
@@ -33,6 +53,40 @@ function startDiscordLogin() {
   window.location.href = "/api/auth/discord/login";
 }
 
+const NAV = [
+  {
+    label: "Overview",
+    items: [
+      { to: "/", title: "Dashboard", icon: LayoutDashboard, need: [] as string[] },
+      { to: "/dispatch", title: "Live Dispatch", icon: Radio, need: ["dispatch.operate"] },
+      { to: "/map", title: "Map", icon: MapIcon, need: ["mdt.police", "mdt.fire", "mdt.ems", "mdt.dot", "dispatch.operate"] },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { to: "/mdt", title: "Police MDT", icon: Shield, need: ["mdt.police"] },
+      { to: "/fire", title: "Fire", icon: Flame, need: ["mdt.fire"] },
+      { to: "/ems", title: "EMS", icon: Activity, need: ["mdt.ems"] },
+      { to: "/dot", title: "DOT Operations", icon: Truck, need: ["mdt.dot"] },
+      { to: "/civilian", title: "Civilian Portal", icon: UserRound, need: ["civilian.self"] },
+    ],
+  },
+  {
+    label: "Records",
+    items: [
+      { to: "/warrants", title: "Warrants", icon: FileWarning, need: ["warrants.manage", "records.read"] },
+      { to: "/bolos", title: "BOLOs", icon: Siren, need: ["bolos.manage", "records.read"] },
+      { to: "/shifts", title: "Shifts", icon: Users, need: ["shifts.read"] },
+      { to: "/applications", title: "Applications", icon: ClipboardList, need: ["applications.review"] },
+    ],
+  },
+  {
+    label: "Administration",
+    items: [{ to: "/admin", title: "Audit & Settings", icon: Car, need: ["cad.admin"] }],
+  },
+];
+
 export default function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   useEffect(() => {
@@ -58,11 +112,11 @@ function Login() {
   return (
     <div className="login">
       <div className="login-card">
-        <p className="muted" style={{ letterSpacing: "0.14em", textTransform: "uppercase" }}>
-          VSRP Operations
+        <p className="kicker">VSRP Operations</p>
+        <h2>Computer-Aided Dispatch</h2>
+        <p className="muted">
+          Sign in with the Discord account on the main roleplay server. CAD will not open until Discord authorizes you.
         </p>
-        <h2 style={{ marginTop: 8 }}>Computer-Aided Dispatch</h2>
-        <p className="muted">Sign in with the Discord account on the main roleplay server. CAD will not open until Discord authorizes you.</p>
         <button className="primary" type="button" onClick={startDiscordLogin}>
           Continue with Discord
         </button>
@@ -78,12 +132,14 @@ function Verify({ me }: { me: Me }) {
   return (
     <div className="login">
       <div className="login-card">
+        <p className="kicker">Account security</p>
         <h2>Discord DM verification</h2>
         <p className="muted">
           Elevated CAD consoles require a one-time code sent by the bot. This is not a replacement for Discord login.
         </p>
-        <div className="row">
+        <Toolbar>
           <button
+            type="button"
             onClick={async () => {
               try {
                 await api("/api/auth/dm-code/request", { method: "POST" });
@@ -95,11 +151,12 @@ function Verify({ me }: { me: Me }) {
           >
             Send code
           </button>
-        </div>
-        <div className="row">
+        </Toolbar>
+        <Toolbar>
           <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6-digit code" />
           <button
             className="primary"
+            type="button"
             onClick={async () => {
               try {
                 await api("/api/auth/dm-code/verify", { method: "POST", body: JSON.stringify({ code }) });
@@ -112,7 +169,7 @@ function Verify({ me }: { me: Me }) {
           >
             Verify
           </button>
-        </div>
+        </Toolbar>
         {msg && <p className="muted">{msg}</p>}
         <p className="muted">Signed in as {me.global_name || me.username}</p>
       </div>
@@ -121,73 +178,125 @@ function Verify({ me }: { me: Me }) {
 }
 
 function Shell({ me }: { me: Me }) {
-  const links: [string, string, string[]][] = [
-    ["/", "Dashboard", []],
-    ["/civilian", "Civilian", ["civilian.self"]],
-    ["/mdt", "Police MDT", ["mdt.police"]],
-    ["/dispatch", "Dispatch", ["dispatch.operate"]],
-    ["/fire", "Fire", ["mdt.fire"]],
-    ["/ems", "EMS", ["mdt.ems"]],
-    ["/dot", "DOT", ["mdt.dot"]],
-    ["/map", "Map", ["mdt.police", "mdt.fire", "mdt.ems", "mdt.dot", "dispatch.operate"]],
-    ["/warrants", "Warrants", ["warrants.manage", "records.read"]],
-    ["/bolos", "BOLOs", ["bolos.manage", "records.read"]],
-    ["/shifts", "Shifts", ["shifts.read"]],
-    ["/applications", "Applications", ["applications.review"]],
-    ["/admin", "Admin", ["cad.admin"]],
-  ];
+  const loc = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [live, setLive] = useState(true);
+  useEffect(() => {
+    api("/api/health")
+      .then((h: any) => setLive(Boolean(h.database)))
+      .catch(() => setLive(false));
+  }, []);
+  const groups = useMemo(
+    () =>
+      NAV.map((g) => ({
+        ...g,
+        items: g.items.filter((item) => (!item.need.length || has(me, ...item.need)) && item.title.toLowerCase().includes(q.toLowerCase())),
+      })).filter((g) => g.items.length),
+    [me, q],
+  );
+  const title = groups.flatMap((g) => g.items).find((i) => i.to === loc.pathname)?.title || "CAD";
+  const initials = (me.global_name || me.username || "CAD").slice(0, 2).toUpperCase();
   return (
-    <div className="layout">
-      <nav className="rail">
-        <h1>VSRP CAD</h1>
-        {links
-          .filter(([, , need]) => !need.length || has(me, ...need))
-          .map(([to, label]) => (
-            <NavLink key={to} to={to} end={to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
-              {label}
-            </NavLink>
-          ))}
-        <button
-          style={{ marginTop: 16, width: "100%" }}
-          onClick={async () => {
-            await api("/api/auth/logout", { method: "POST" });
-            try {
-              localStorage.removeItem("vsrp_cad");
-              sessionStorage.removeItem("vsrp_cad");
-            } catch {
-              /* ignore */
-            }
-            window.location.href = "/login";
-          }}
-        >
-          Sign out
-        </button>
-        <p className="muted" style={{ marginTop: 12 }}>
-          {me.global_name || me.username}
-        </p>
-      </nav>
-      <div className="main">
-        {me.needs_dm_verify && (
-          <div className="banner">
-            DM verification required for elevated consoles. <NavLink to="/verify">Verify now</NavLink>
+    <div className={`app-shell${collapsed ? " collapsed" : ""}`}>
+      <aside className={`sidebar${open ? " open" : ""}`}>
+        <div className="brand">
+          <div className="brand-mark">VS</div>
+          <div className="brand-copy">
+            <strong>VSRP CAD</strong>
+            <span className="muted tiny">Command center</span>
           </div>
-        )}
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/civilian" element={<Civilian />} />
-          <Route path="/mdt" element={<Mdt />} />
-          <Route path="/mdt/people/:id" element={<Person />} />
-          <Route path="/dispatch" element={<Dispatch />} />
-          <Route path="/fire" element={<DeptCalls path="/api/fire/calls" title="Fire" />} />
-          <Route path="/ems" element={<Ems />} />
-          <Route path="/dot" element={<Dot />} />
-          <Route path="/map" element={<MapPage />} />
-          <Route path="/warrants" element={<Warrants />} />
-          <Route path="/bolos" element={<Bolos />} />
-          <Route path="/shifts" element={<Shifts />} />
-          <Route path="/applications" element={<Applications />} />
-          <Route path="/admin" element={<Admin />} />
-        </Routes>
+        </div>
+        <nav className="nav-groups">
+          {groups.map((g) => (
+            <div key={g.label}>
+              <div className="nav-label">{g.label}</div>
+              {g.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === "/"}
+                    className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+                    onClick={() => setOpen(false)}
+                    title={item.title}
+                  >
+                    <Icon size={16} />
+                    <span>{item.title}</span>
+                  </NavLink>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+      </aside>
+      <div className="workspace">
+        <header className="topbar">
+          <button className="icon-btn mobile-toggle" type="button" onClick={() => setOpen((v) => !v)} aria-label="Open navigation">
+            <Menu size={16} />
+          </button>
+          <button className="icon-btn" type="button" onClick={() => setCollapsed((v) => !v)} aria-label="Collapse sidebar">
+            <PanelLeft size={16} />
+          </button>
+          <div>
+            <div className="crumb">Operations / {title}</div>
+          </div>
+          <div className="search">
+            <label className="muted tiny" htmlFor="nav-filter" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <Search size={14} />
+              <input id="nav-filter" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter modules…  /" />
+            </label>
+          </div>
+          <span className={`live-dot${live ? "" : " off"}`}>
+            <i />
+            {live ? "Systems online" : "Degraded"}
+          </span>
+          <Bell size={16} className="muted" />
+          <div className="userchip">
+            <div className="avatar">{initials}</div>
+            <span>{me.global_name || me.username}</span>
+            <button
+              type="button"
+              onClick={async () => {
+                await api("/api/auth/logout", { method: "POST" });
+                try {
+                  localStorage.removeItem("vsrp_cad");
+                  sessionStorage.removeItem("vsrp_cad");
+                } catch {
+                  /* ignore */
+                }
+                window.location.href = "/login";
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        </header>
+        <div className="main">
+          {me.needs_dm_verify && (
+            <div className="banner">
+              DM verification required for elevated consoles. <NavLink to="/verify">Verify now</NavLink>
+            </div>
+          )}
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/civilian" element={<Civilian />} />
+            <Route path="/mdt" element={<Mdt />} />
+            <Route path="/mdt/people/:id" element={<Person />} />
+            <Route path="/dispatch" element={<Dispatch />} />
+            <Route path="/fire" element={<DeptCalls path="/api/fire/calls" title="Fire" />} />
+            <Route path="/ems" element={<Ems />} />
+            <Route path="/dot" element={<Dot />} />
+            <Route path="/map" element={<MapPage />} />
+            <Route path="/warrants" element={<Warrants />} />
+            <Route path="/bolos" element={<Bolos />} />
+            <Route path="/shifts" element={<Shifts />} />
+            <Route path="/applications" element={<Applications />} />
+            <Route path="/admin" element={<Admin />} />
+          </Routes>
+        </div>
       </div>
     </div>
   );
@@ -200,66 +309,39 @@ function Dashboard() {
     api("/api/dashboard").then(setData).catch((e) => setErr(e.message));
   }, []);
   if (err) return <p className="err">{err}</p>;
-  if (!data) return <p>Loading dashboard…</p>;
+  if (!data) return <p className="muted">Loading dashboard…</p>;
+  const empty = !data.open_calls && !data.pending_calls && !(data.recent_calls || []).length;
   return (
     <>
-      <h2>Operations dashboard</h2>
-      <div className="cards">
-        <div className="card">
-          <div className="muted">Open calls</div>
-          <div className="n">{data.open_calls}</div>
-        </div>
-        <div className="card">
-          <div className="muted">Pending dispatch</div>
-          <div className="n">{data.pending_calls}</div>
-        </div>
-        <div className="card">
-          <div className="muted">Active BOLOs</div>
-          <div className="n">{data.active_bolos}</div>
-        </div>
-        <div className="card">
-          <div className="muted">Your unpaid citations</div>
-          <div className="n">{data.my_unpaid_citations}</div>
-        </div>
+      <PageHeader kicker="Overview" title="Operations dashboard" />
+      {empty && (
+        <EmptyState
+          title="No live incidents yet"
+          body="Create a call from Live Dispatch, add a unit, and this board will populate from the database."
+        />
+      )}
+      <div className="stats">
+        <StatCard label="Open calls" value={data.open_calls ?? 0} />
+        <StatCard label="Pending dispatch" value={data.pending_calls ?? 0} />
+        <StatCard label="Active BOLOs" value={data.active_bolos ?? 0} />
+        <StatCard label="Your unpaid citations" value={data.my_unpaid_citations ?? 0} />
       </div>
-      <h3>Recent calls</h3>
-      <Table
-        rows={data.recent_calls}
-        cols={[
-          ["call_number", "Call"],
-          ["discipline", "Disc."],
-          ["priority", "Pri"],
-          ["status", "Status"],
-          ["nature", "Nature"],
-          ["location_text", "Location"],
-        ]}
-        empty="No calls in the database."
-      />
+      <Panel title="Recent calls">
+        <DataTable
+          searchable
+          rows={data.recent_calls}
+          cols={[
+            ["call_number", "Call"],
+            ["discipline", "Disc."],
+            ["priority", "Pri"],
+            ["status", "Status"],
+            ["nature", "Nature"],
+            ["location_text", "Location"],
+          ]}
+          empty="No calls in the database."
+        />
+      </Panel>
     </>
-  );
-}
-
-function Table({ rows, cols, empty }: { rows: any[]; cols: [string, string][]; empty: string }) {
-  if (!rows?.length) return <p className="muted">{empty}</p>;
-  return (
-    <table>
-      <thead>
-        <tr>
-          {cols.map(([k, l]) => (
-            <th key={k}>{l}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <tr key={r.id ?? i}>
-            {cols.map(([k]) => (
-              <td key={k}>{String(r[k] ?? "")}</td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }
 
@@ -269,68 +351,53 @@ function Civilian() {
   useEffect(() => {
     api("/api/civilian/me").then(setData).catch(() => setData({ error: true }));
   }, []);
-  if (!data) return <p>Loading…</p>;
+  if (!data) return <p className="muted">Loading…</p>;
   if (data.error) return <p className="err">Could not load civilian file.</p>;
   const uid = data.user?.user_id;
   return (
     <>
-      <h2>Civilian portal</h2>
+      <PageHeader kicker="Civilian" title="Civilian portal" />
       <p className="muted">Discord ID {uid}. Fictional character names are not proof of identity.</p>
-      <h3>Characters</h3>
-      <Table rows={data.characters} cols={[["display_name", "Name"], ["dob", "DOB"]]} empty="No characters yet." />
-      <div className="row">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Character name" />
-        <button
-          className="primary"
-          onClick={async () => {
-            await api(`/api/people/${uid}/characters`, {
-              method: "POST",
-              body: JSON.stringify({ display_name: name, is_primary: true }),
-            });
-            setData(await api("/api/civilian/me"));
-          }}
-        >
-          Add character
-        </button>
-      </div>
-      <h3>Vehicles</h3>
-      <Table rows={data.vehicles} cols={[["plate", "Plate"], ["make", "Make"], ["model", "Model"], ["status", "Status"]]} empty="No registered vehicles." />
-      <h3>Citations</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Case</th>
-            <th>Violation</th>
-            <th>Fine</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {(data.citations || []).map((c: any) => (
-            <tr key={c.id}>
-              <td>{c.case_number}</td>
-              <td>{c.violation}</td>
-              <td>${c.fine}</td>
-              <td>{c.payment_status}</td>
-              <td>
-                {c.payment_status === "unpaid" && (
-                  <button
-                    onClick={async () => {
-                      await api(`/api/citations/${c.id}/pay`, { method: "POST" });
-                      setData(await api("/api/civilian/me"));
-                    }}
-                  >
-                    Pay
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <h3>Warrants</h3>
-      <Table rows={data.warrants} cols={[["case_number", "Case"], ["reason", "Reason"], ["status", "Status"]]} empty="No warrants." />
+      <Panel title="Characters">
+        <DataTable rows={data.characters} cols={[["display_name", "Name"], ["dob", "DOB"]]} empty="No characters yet." />
+        <Toolbar>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Character name" />
+          <button
+            className="primary"
+            type="button"
+            onClick={async () => {
+              await api(`/api/people/${uid}/characters`, {
+                method: "POST",
+                body: JSON.stringify({ display_name: name, is_primary: true }),
+              });
+              setData(await api("/api/civilian/me"));
+            }}
+          >
+            Add character
+          </button>
+        </Toolbar>
+      </Panel>
+      <Panel title="Vehicles">
+        <DataTable rows={data.vehicles} cols={[["plate", "Plate"], ["make", "Make"], ["model", "Model"], ["status", "Status"]]} empty="No registered vehicles." />
+      </Panel>
+      <Panel title="Citations">
+        <DataTable rows={data.citations} cols={[["case_number", "Case"], ["violation", "Violation"], ["fine", "Fine"], ["payment_status", "Status"]]} empty="No citations." />
+        {(data.citations || []).filter((c: any) => c.payment_status === "unpaid").map((c: any) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={async () => {
+              await api(`/api/citations/${c.id}/pay`, { method: "POST" });
+              setData(await api("/api/civilian/me"));
+            }}
+          >
+            Pay {c.case_number}
+          </button>
+        ))}
+      </Panel>
+      <Panel title="Warrants">
+        <DataTable rows={data.warrants} cols={[["case_number", "Case"], ["reason", "Reason"], ["status", "Status"]]} empty="No warrants." />
+      </Panel>
     </>
   );
 }
@@ -347,64 +414,69 @@ function Mdt() {
   const nav = useNavigate();
   return (
     <>
-      <h2>Police MDT</h2>
-      <div className="row">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or Discord ID" />
-        <button
-          onClick={async () => {
-            const r = await api<{ results: any[] }>(`/api/people?q=${encodeURIComponent(q)}`);
-            setPeople(r.results);
-          }}
-        >
-          Search people
-        </button>
-        <input value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="Plate" />
-        <button
-          onClick={async () => {
-            const r = await api<{ results: any[] }>(`/api/vehicles?plate=${encodeURIComponent(plate)}`);
-            setVehicles(r.results);
-          }}
-        >
-          Search plate
-        </button>
-      </div>
-      {people.map((p) => (
-        <p key={p.user_id}>
-          <button onClick={() => nav(`/mdt/people/${p.user_id}`)}>
+      <PageHeader kicker="Police" title="Mobile Data Terminal" />
+      <Panel title="Lookups">
+        <Toolbar>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or Discord ID" />
+          <button
+            type="button"
+            onClick={async () => {
+              const r = await api<{ results: any[] }>(`/api/people?q=${encodeURIComponent(q)}`);
+              setPeople(r.results);
+            }}
+          >
+            Search people
+          </button>
+          <input value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="Plate" />
+          <button
+            type="button"
+            onClick={async () => {
+              const r = await api<{ results: any[] }>(`/api/vehicles?plate=${encodeURIComponent(plate)}`);
+              setVehicles(r.results);
+            }}
+          >
+            Search plate
+          </button>
+        </Toolbar>
+        {people.map((p) => (
+          <button key={p.user_id} type="button" onClick={() => nav(`/mdt/people/${p.user_id}`)}>
             {p.display_name || p.user_id}
           </button>
-        </p>
-      ))}
-      <Table rows={vehicles} cols={[["plate", "Plate"], ["make", "Make"], ["model", "Model"], ["user_id", "Owner"]]} empty={plate ? "No vehicles." : "Search a plate."} />
-      <h3>Issue citation</h3>
-      <div className="row">
-        <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject Discord ID" />
-        <input value={fine} onChange={(e) => setFine(e.target.value)} placeholder="Fine" />
-        <input value={charge} onChange={(e) => setCharge(e.target.value)} placeholder="Charge description" />
-        <button
-          className="primary"
-          onClick={async () => {
-            try {
-              const row = await api<any>("/api/citations", {
-                method: "POST",
-                body: JSON.stringify({
-                  subject_id: Number(subject),
-                  fine: Number(fine),
-                  form: { charge_description: charge, va_code: "", court_type: "GDC" },
-                }),
-              });
-              setMsg(`Citation ${row.case_number} issued. Discord delivery queued.`);
-            } catch (e: any) {
-              setMsg(e.message);
-            }
-          }}
-        >
-          Issue
-        </button>
-      </div>
-      <h3>Issue warrant</h3>
-      <WarrantForm />
-      {msg && <p>{msg}</p>}
+        ))}
+        <DataTable rows={vehicles} cols={[["plate", "Plate"], ["make", "Make"], ["model", "Model"], ["user_id", "Owner"]]} empty={plate ? "No vehicles." : "Search a plate."} />
+      </Panel>
+      <Panel title="Issue citation">
+        <Toolbar>
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject Discord ID" />
+          <input value={fine} onChange={(e) => setFine(e.target.value)} placeholder="Fine" />
+          <input value={charge} onChange={(e) => setCharge(e.target.value)} placeholder="Charge description" />
+          <button
+            className="primary"
+            type="button"
+            onClick={async () => {
+              try {
+                const row = await api<any>("/api/citations", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    subject_id: Number(subject),
+                    fine: Number(fine),
+                    form: { charge_description: charge, va_code: "", court_type: "GDC" },
+                  }),
+                });
+                setMsg(`Citation ${row.case_number} issued. Discord delivery queued.`);
+              } catch (e: any) {
+                setMsg(e.message);
+              }
+            }}
+          >
+            Issue
+          </button>
+        </Toolbar>
+      </Panel>
+      <Panel title="Issue warrant">
+        <WarrantForm />
+        {msg && <p>{msg}</p>}
+      </Panel>
     </>
   );
 }
@@ -414,11 +486,12 @@ function WarrantForm() {
   const [reason, setReason] = useState("");
   const [msg, setMsg] = useState("");
   return (
-    <div className="row">
+    <Toolbar>
       <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject Discord ID" />
       <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Charge / reason" />
       <button
         className="danger"
+        type="button"
         onClick={async () => {
           try {
             const row = await api<any>("/api/warrants", {
@@ -437,7 +510,7 @@ function WarrantForm() {
         Issue warrant
       </button>
       {msg && <span>{msg}</span>}
-    </div>
+    </Toolbar>
   );
 }
 
@@ -447,21 +520,24 @@ function Person() {
   useEffect(() => {
     api(`/api/people/${id}`).then(setData).catch(() => setData({ error: true }));
   }, [id]);
-  if (!data) return <p>Loading…</p>;
+  if (!data) return <p className="muted">Loading…</p>;
   if (data.error) return <p className="err">Not found or no access.</p>;
   return (
     <>
-      <h2>Person {id}</h2>
+      <PageHeader kicker="Records" title={`Person ${id}`} />
       <p className="muted">
         License suspended: {data.user.license_suspended ? "yes" : "no"} · Registration suspended:{" "}
         {data.user.registration_suspended ? "yes" : "no"}
       </p>
-      <h3>Vehicles</h3>
-      <Table rows={data.vehicles} cols={[["plate", "Plate"], ["make", "Make"], ["model", "Model"], ["status", "Status"]]} empty="None" />
-      <h3>Citations</h3>
-      <Table rows={data.citations} cols={[["case_number", "Case"], ["violation", "Violation"], ["payment_status", "Pay"]]} empty="None" />
-      <h3>Warrants</h3>
-      <Table rows={data.warrants} cols={[["case_number", "Case"], ["reason", "Reason"], ["status", "Status"]]} empty="None" />
+      <Panel title="Vehicles">
+        <DataTable rows={data.vehicles} cols={[["plate", "Plate"], ["make", "Make"], ["model", "Model"], ["status", "Status"]]} empty="None" />
+      </Panel>
+      <Panel title="Citations">
+        <DataTable rows={data.citations} cols={[["case_number", "Case"], ["violation", "Violation"], ["payment_status", "Pay"]]} empty="None" />
+      </Panel>
+      <Panel title="Warrants">
+        <DataTable rows={data.warrants} cols={[["case_number", "Case"], ["reason", "Reason"], ["status", "Status"]]} empty="None" />
+      </Panel>
     </>
   );
 }
@@ -482,14 +558,16 @@ function Dispatch() {
   };
   useEffect(() => {
     refresh();
-    const ws = new WebSocket(`${location.origin.replace("http", "ws")}/api/ws`);
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${location.host}/api/ws`);
     ws.onmessage = () => refresh();
     return () => ws.close();
   }, []);
+  const pending = calls.filter((c) => c.status === "pending" || c.status === "new");
   return (
     <>
-      <h2>Dispatch</h2>
-      <div className="row">
+      <PageHeader kicker="Dispatch" title="Live dispatch" />
+      <Toolbar>
         <select value={disc} onChange={(e) => setDisc(e.target.value)}>
           <option>police</option>
           <option>fire</option>
@@ -501,6 +579,7 @@ function Dispatch() {
         <input value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Location" />
         <button
           className="primary"
+          type="button"
           onClick={async () => {
             await api("/api/calls", {
               method: "POST",
@@ -511,78 +590,93 @@ function Dispatch() {
         >
           Create call
         </button>
-      </div>
-      <h3>Active / recent calls</h3>
-      {!calls.length && <p className="muted">No calls.</p>}
-      {calls.map((c) => (
-        <div key={c.id} className="card" style={{ marginBottom: 8 }}>
-          <strong>{c.call_number}</strong> [{c.discipline}] pri {c.priority} — {c.status}
-          <div className="muted">{c.nature} @ {c.location_text}</div>
-          <div className="row">
-            {units.map((u) => (
-              <button
-                key={u.id}
-                onClick={async () => {
-                  await api(`/api/calls/${c.id}/assign`, { method: "POST", body: JSON.stringify({ unit_id: u.id }) });
-                  refresh();
-                }}
-              >
-                Assign {u.callsign}
-              </button>
-            ))}
-            <button
-              onClick={async () => {
-                await api(`/api/calls/${c.id}/close`, { method: "POST" });
-                refresh();
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      ))}
-      <h3>Units</h3>
-      <div className="row">
-        <input value={callsign} onChange={(e) => setCallsign(e.target.value)} placeholder="Callsign" />
-        <select value={dept} onChange={(e) => setDept(e.target.value)}>
-          <option>police1</option>
-          <option>police2</option>
-          <option>fire1</option>
-          <option>fire2</option>
-          <option>fire3</option>
-          <option>ems</option>
-          <option>dot</option>
-          <option>dispatch</option>
-        </select>
-        <button
-          onClick={async () => {
-            await api("/api/units", { method: "POST", body: JSON.stringify({ callsign, department: dept }) });
-            refresh();
-          }}
-        >
-          Add unit
-        </button>
-      </div>
-      {units.map((u) => (
-        <div key={u.id} className="row">
-          <span>
-            {u.callsign} {u.department} <span className={`status-${u.status}`}>{u.status}</span>
-          </span>
-          {["available", "en_route", "on_scene", "busy", "out_of_service"].map((s) => (
-            <button
-              key={s}
-              onClick={async () => {
-                await api(`/api/units/${u.id}/status`, { method: "POST", body: JSON.stringify({ status: s }) });
-                refresh();
-              }}
-            >
-              {s}
-            </button>
+      </Toolbar>
+      <div className="grid-2">
+        <Panel title={`Call queue (${calls.length})`} actions={<span className="muted tiny">{pending.length} unassigned/pending</span>}>
+          {!calls.length && <EmptyState title="No calls" body="Create a call to start the board." />}
+          {calls.map((c) => (
+            <article key={c.id} className="call-card">
+              <header>
+                <strong>{c.call_number}</strong>
+                <span>
+                  <StatusBadge value={c.discipline} /> <StatusBadge value={c.status} />
+                </span>
+              </header>
+              <div className="muted">
+                Pri {c.priority} · {c.nature} @ {c.location_text}
+              </div>
+              <Toolbar>
+                {units.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={async () => {
+                      await api(`/api/calls/${c.id}/assign`, { method: "POST", body: JSON.stringify({ unit_id: u.id }) });
+                      refresh();
+                    }}
+                  >
+                    Assign {u.callsign}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await api(`/api/calls/${c.id}/close`, { method: "POST" });
+                    refresh();
+                  }}
+                >
+                  Close
+                </button>
+              </Toolbar>
+            </article>
           ))}
-        </div>
-      ))}
-      <h3>Pager</h3>
-      <Pager />
+        </Panel>
+        <Panel title="Unit roster">
+          <Toolbar>
+            <input value={callsign} onChange={(e) => setCallsign(e.target.value)} placeholder="Callsign" />
+            <select value={dept} onChange={(e) => setDept(e.target.value)}>
+              <option>police1</option>
+              <option>police2</option>
+              <option>fire1</option>
+              <option>fire2</option>
+              <option>fire3</option>
+              <option>ems</option>
+              <option>dot</option>
+              <option>dispatch</option>
+            </select>
+            <button
+              type="button"
+              onClick={async () => {
+                await api("/api/units", { method: "POST", body: JSON.stringify({ callsign, department: dept }) });
+                refresh();
+              }}
+            >
+              Add unit
+            </button>
+          </Toolbar>
+          {units.map((u) => (
+            <div key={u.id} className="unit-row">
+              <strong>{u.callsign}</strong>
+              <span className="muted">{u.department}</span>
+              <StatusBadge value={u.status} />
+              {["available", "en_route", "on_scene", "busy", "out_of_service"].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={async () => {
+                    await api(`/api/units/${u.id}/status`, { method: "POST", body: JSON.stringify({ status: s }) });
+                    refresh();
+                  }}
+                >
+                  {s.replace("_", " ")}
+                </button>
+              ))}
+            </div>
+          ))}
+          <h3 style={{ marginTop: 16 }}>Pager</h3>
+          <Pager />
+        </Panel>
+      </div>
     </>
   );
 }
@@ -592,7 +686,7 @@ function Pager() {
   const [message, setMessage] = useState("");
   const [msg, setMsg] = useState("");
   return (
-    <div className="row">
+    <Toolbar>
       <select value={department} onChange={(e) => setDepartment(e.target.value)}>
         <option value="fire1">WFR</option>
         <option value="fire2">RRVFD</option>
@@ -606,6 +700,7 @@ function Pager() {
       <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Alert message" />
       <button
         className="danger"
+        type="button"
         onClick={async () => {
           await api("/api/dispatch/page", { method: "POST", body: JSON.stringify({ department, message }) });
           setMsg("Queued for Discord.");
@@ -614,7 +709,7 @@ function Pager() {
         Page
       </button>
       {msg && <span className="muted">{msg}</span>}
-    </div>
+    </Toolbar>
   );
 }
 
@@ -625,8 +720,10 @@ function DeptCalls({ path, title }: { path: string; title: string }) {
   }, [path]);
   return (
     <>
-      <h2>{title}</h2>
-      <Table rows={rows} cols={[["call_number", "Call"], ["status", "Status"], ["nature", "Nature"], ["location_text", "Location"]]} empty="No incidents." />
+      <PageHeader kicker="Operations" title={title} />
+      <Panel>
+        <DataTable searchable rows={rows} cols={[["call_number", "Call"], ["status", "Status"], ["nature", "Nature"], ["location_text", "Location"]]} empty="No incidents." />
+      </Panel>
     </>
   );
 }
@@ -640,22 +737,26 @@ function Ems() {
   }, []);
   return (
     <>
-      <h2>EMS</h2>
-      <Table rows={data.results} cols={[["call_number", "Call"], ["status", "Status"], ["nature", "Nature"]]} empty="No EMS calls." />
-      <h3>Patient care report (fictional)</h3>
-      <div className="row">
-        <input value={patient} onChange={(e) => setPatient(e.target.value)} placeholder="Patient name" />
-        <input value={cc} onChange={(e) => setCc(e.target.value)} placeholder="Chief complaint" />
-        <button
-          onClick={async () => {
-            await api("/api/ems/pcr", { method: "POST", body: JSON.stringify({ patient_name: patient, chief_complaint: cc }) });
-            setData(await api("/api/ems/calls"));
-          }}
-        >
-          File PCR
-        </button>
-      </div>
-      <Table rows={data.pcrs} cols={[["patient_name", "Patient"], ["chief_complaint", "Complaint"], ["disposition", "Disp."]]} empty="No PCRs." />
+      <PageHeader kicker="EMS" title="Emergency medical" />
+      <Panel title="Calls">
+        <DataTable rows={data.results} cols={[["call_number", "Call"], ["status", "Status"], ["nature", "Nature"]]} empty="No EMS calls." />
+      </Panel>
+      <Panel title="Patient care report (fictional)">
+        <Toolbar>
+          <input value={patient} onChange={(e) => setPatient(e.target.value)} placeholder="Patient name" />
+          <input value={cc} onChange={(e) => setCc(e.target.value)} placeholder="Chief complaint" />
+          <button
+            type="button"
+            onClick={async () => {
+              await api("/api/ems/pcr", { method: "POST", body: JSON.stringify({ patient_name: patient, chief_complaint: cc }) });
+              setData(await api("/api/ems/calls"));
+            }}
+          >
+            File PCR
+          </button>
+        </Toolbar>
+        <DataTable rows={data.pcrs} cols={[["patient_name", "Patient"], ["chief_complaint", "Complaint"], ["disposition", "Disp."]]} empty="No PCRs." />
+      </Panel>
     </>
   );
 }
@@ -668,38 +769,43 @@ function Dot() {
   }, []);
   return (
     <>
-      <h2>DOT operations</h2>
-      <Table rows={data.results} cols={[["call_number", "Call"], ["status", "Status"], ["nature", "Nature"]]} empty="No DOT calls." />
-      <h3>Road closures</h3>
-      <div className="row">
-        <input value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Location" />
-        <button
-          className="primary"
-          onClick={async () => {
-            await api("/api/dot/closures", { method: "POST", body: JSON.stringify({ location_text: loc }) });
-            setData(await api("/api/dot/calls"));
-          }}
-        >
-          Open closure
-        </button>
-      </div>
-      {(data.closures || []).map((c: any) => (
-        <div key={c.id} className="row">
-          <span>
-            {c.location_text} — {c.status}
-          </span>
-          {c.status === "open" && (
-            <button
-              onClick={async () => {
-                await api(`/api/dot/closures/${c.id}/clear`, { method: "POST" });
-                setData(await api("/api/dot/calls"));
-              }}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      ))}
+      <PageHeader kicker="DOT" title="Transportation operations" />
+      <Panel title="Calls">
+        <DataTable rows={data.results} cols={[["call_number", "Call"], ["status", "Status"], ["nature", "Nature"]]} empty="No DOT calls." />
+      </Panel>
+      <Panel title="Road closures">
+        <Toolbar>
+          <input value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Location" />
+          <button
+            className="primary"
+            type="button"
+            onClick={async () => {
+              await api("/api/dot/closures", { method: "POST", body: JSON.stringify({ location_text: loc }) });
+              setData(await api("/api/dot/calls"));
+            }}
+          >
+            Open closure
+          </button>
+        </Toolbar>
+        {(data.closures || []).map((c: any) => (
+          <div key={c.id} className="unit-row">
+            <span>
+              {c.location_text} — <StatusBadge value={c.status} />
+            </span>
+            {c.status === "open" && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await api(`/api/dot/closures/${c.id}/clear`, { method: "POST" });
+                  setData(await api("/api/dot/calls"));
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        ))}
+      </Panel>
     </>
   );
 }
@@ -721,17 +827,18 @@ function MapPage() {
         L.marker([u.lat, u.lng]).addTo(map).bindPopup(`${u.callsign} (${u.status})`);
       });
       (d as any).calls.forEach((c: any) => {
-        L.circleMarker([c.lat, c.lng], { color: "#e74c3c" }).addTo(map).bindPopup(c.call_number);
+        L.circleMarker([c.lat, c.lng], { color: "#ef4444" }).addTo(map).bindPopup(c.call_number);
       });
     });
   }, []);
   return (
     <>
-      <h2>Map</h2>
+      <PageHeader kicker="Map" title="Tactical map" />
       <p className="muted">Positions are manual. Discord does not provide GPS. Unplaced units stay off the map.</p>
       <div id="map" />
-      <h3>Unplaced units</h3>
-      <Table rows={data.unplaced} cols={[["callsign", "Unit"], ["department", "Dept"], ["status", "Status"]]} empty="All units placed or none exist." />
+      <Panel title="Unplaced units">
+        <DataTable rows={data.unplaced} cols={[["callsign", "Unit"], ["department", "Dept"], ["status", "Status"]]} empty="All units placed or none exist." />
+      </Panel>
     </>
   );
 }
@@ -744,37 +851,41 @@ function Warrants() {
   }, []);
   return (
     <>
-      <h2>Warrants</h2>
-      <WarrantForm />
-      {rows.map((w) => (
-        <div key={w.id} className="row">
-          <span>
-            #{w.case_number} {w.reason} — {w.status}
-          </span>
-          {w.active === 1 && (
-            <>
-              <button
-                className="ok"
-                onClick={async () => {
-                  await api(`/api/warrants/${w.id}/serve`, { method: "POST", body: "{}" });
-                  load();
-                }}
-              >
-                Serve
-              </button>
-              <button
-                onClick={async () => {
-                  await api(`/api/warrants/${w.id}/clear`, { method: "POST" });
-                  load();
-                }}
-              >
-                Clear
-              </button>
-            </>
-          )}
-        </div>
-      ))}
-      {!rows.length && <p className="muted">No warrants.</p>}
+      <PageHeader kicker="Records" title="Warrants" />
+      <Panel>
+        <WarrantForm />
+        {rows.map((w) => (
+          <div key={w.id} className="unit-row">
+            <span>
+              #{w.case_number} {w.reason} — <StatusBadge value={w.status} />
+            </span>
+            {w.active === 1 && (
+              <>
+                <button
+                  className="ok"
+                  type="button"
+                  onClick={async () => {
+                    await api(`/api/warrants/${w.id}/serve`, { method: "POST", body: "{}" });
+                    load();
+                  }}
+                >
+                  Serve
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await api(`/api/warrants/${w.id}/clear`, { method: "POST" });
+                    load();
+                  }}
+                >
+                  Clear
+                </button>
+              </>
+            )}
+          </div>
+        ))}
+        {!rows.length && <p className="muted">No warrants.</p>}
+      </Panel>
     </>
   );
 }
@@ -789,40 +900,44 @@ function Bolos() {
   }, []);
   return (
     <>
-      <h2>BOLOs</h2>
-      <div className="row">
-        <select value={kind} onChange={(e) => setKind(e.target.value)}>
-          <option value="person">person</option>
-          <option value="vehicle">vehicle</option>
-        </select>
-        <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" />
-        <button
-          className="primary"
-          onClick={async () => {
-            await api("/api/bolos", { method: "POST", body: JSON.stringify({ kind, description: desc }) });
-            load();
-          }}
-        >
-          Create
-        </button>
-      </div>
-      {rows.map((b) => (
-        <div key={b.id} className="row">
-          <span>
-            {b.kind} {b.status}: {b.description}
-          </span>
-          {b.status === "active" && (
-            <button
-              onClick={async () => {
-                await api(`/api/bolos/${b.id}/clear`, { method: "POST" });
-                load();
-              }}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      ))}
+      <PageHeader kicker="Records" title="BOLOs" />
+      <Panel>
+        <Toolbar>
+          <select value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="person">person</option>
+            <option value="vehicle">vehicle</option>
+          </select>
+          <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" />
+          <button
+            className="primary"
+            type="button"
+            onClick={async () => {
+              await api("/api/bolos", { method: "POST", body: JSON.stringify({ kind, description: desc }) });
+              load();
+            }}
+          >
+            Create
+          </button>
+        </Toolbar>
+        {rows.map((b) => (
+          <div key={b.id} className="unit-row">
+            <span>
+              {b.kind} <StatusBadge value={b.status} /> {b.description}
+            </span>
+            {b.status === "active" && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await api(`/api/bolos/${b.id}/clear`, { method: "POST" });
+                  load();
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        ))}
+      </Panel>
     </>
   );
 }
@@ -834,9 +949,11 @@ function Shifts() {
   }, []);
   return (
     <>
-      <h2>Active shifts</h2>
+      <PageHeader kicker="Personnel" title="Active shifts" />
       <p className="muted">Start/stop remains on FD/PD Discord (`/shift`).</p>
-      <Table rows={rows} cols={[["user_id", "User"], ["guild_id", "Guild"], ["status", "Status"], ["started_at", "Started"]]} empty="No active shifts." />
+      <Panel>
+        <DataTable rows={rows} cols={[["user_id", "User"], ["guild_id", "Guild"], ["status", "Status"], ["started_at", "Started"]]} empty="No active shifts." />
+      </Panel>
     </>
   );
 }
@@ -849,15 +966,17 @@ function Applications() {
   }, []);
   return (
     <>
-      <h2>Applications</h2>
+      <PageHeader kicker="Management" title="Applications" />
       <p className="muted">Approvals stay in Discord so role grants are not duplicated.</p>
-      {rows.map((a) => (
-        <button key={a.id} onClick={async () => setDetail(await api(`/api/applications/${a.id}`))}>
-          #{a.id} {a.department} {a.status}
-        </button>
-      ))}
+      <Toolbar>
+        {rows.map((a) => (
+          <button key={a.id} type="button" onClick={async () => setDetail(await api(`/api/applications/${a.id}`))}>
+            #{a.id} {a.department} {a.status}
+          </button>
+        ))}
+      </Toolbar>
       {detail && (
-        <div className="card" style={{ marginTop: 12 }}>
+        <Panel title="Answers">
           {(detail.answers || []).map((x: any, i: number) => (
             <p key={i}>
               <strong>{x.question}</strong>
@@ -865,7 +984,7 @@ function Applications() {
               {x.answer}
             </p>
           ))}
-        </div>
+        </Panel>
       )}
     </>
   );
@@ -878,9 +997,10 @@ function Admin() {
   }, []);
   return (
     <>
-      <h2>Administration</h2>
-      <h3>CAD audit</h3>
-      <Table rows={audit.cad} cols={[["created_at", "When"], ["actor_id", "Actor"], ["action", "Action"], ["entity_type", "Entity"]]} empty="No CAD audit events." />
+      <PageHeader kicker="Administration" title="Audit log" />
+      <Panel title="CAD audit">
+        <DataTable searchable rows={audit.cad} cols={[["created_at", "When"], ["actor_id", "Actor"], ["action", "Action"], ["entity_type", "Entity"]]} empty="No CAD audit events." />
+      </Panel>
     </>
   );
 }
