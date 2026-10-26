@@ -1,10 +1,10 @@
 {
   "seq": {
     "SET": 14,
-    "cad_audit": 10,
-    "cad_dm_codes": 2,
+    "cad_audit": 11,
+    "cad_dm_codes": 3,
     "cad_oauth_tokens": 1,
-    "cad_outbox": 2,
+    "cad_outbox": 3,
     "cad_users": 1,
     "users": 8
   },
@@ -30,6 +30,7 @@
         "username": "mr.kujo1"
       }
     ],
+    "audit_logs": [],
     "cad_audit": [
       {
         "action": "login",
@@ -110,6 +111,14 @@
         "entity_id": "1391201462259810354",
         "entity_type": "cad_users",
         "id": 10
+      },
+      {
+        "action": "dm_code_requested",
+        "actor_id": 1391201462259810354,
+        "details_json": null,
+        "entity_id": "1391201462259810354",
+        "entity_type": "cad_users",
+        "id": 11
       }
     ],
     "cad_bolos": [],
@@ -125,9 +134,16 @@
       },
       {
         "code_hash": "43a5f8b509414c58c65baa7e15d42fcc669b24a825838583e93f25b275da9bdc",
+        "consumed_at": "2026-10-26T23:43:59.433485+00:00",
         "discord_user_id": 1391201462259810354,
         "expires_at": "2026-10-26T23:38:03.227603+00:00",
         "id": 2
+      },
+      {
+        "code_hash": "4c431f2aebf3db3cb72d15fef6212430183d5046cd930021e82d1e7cf25b131d",
+        "discord_user_id": 1391201462259810354,
+        "expires_at": "2026-10-26T23:53:59.433761+00:00",
+        "id": 3
       }
     ],
     "cad_oauth_tokens": [
@@ -150,6 +166,11 @@
         "id": 2,
         "kind": "dm_code",
         "payload_json": "{\"user_id\": 1391201462259810354, \"code\": \"862685\"}"
+      },
+      {
+        "id": 3,
+        "kind": "dm_code",
+        "payload_json": "{\"user_id\": 1391201462259810354, \"code\": \"167176\"}"
       }
     ],
     "cad_pcrs": [],
@@ -201,7 +222,7 @@
         "discord_user_id": 1391201462259810354,
         "expires_at": "2026-10-27T11:13:20.473186+00:00",
         "id": "fd287743-fa6f-483c-aa21-bb821ee3c467",
-        "last_seen_at": "2026-10-26T23:28:03.227141+00:00",
+        "last_seen_at": "2026-10-26T23:43:59.433119+00:00",
         "token_hash": "0c9b27623113411d4ebf7015ed837b2727f2bd8c02f7942468c17f73832b7d60"
       }
     ],
