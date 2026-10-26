@@ -1,10 +1,10 @@
 {
   "seq": {
     "SET": 14,
-    "cad_audit": 11,
+    "cad_audit": 12,
     "cad_dm_codes": 3,
     "cad_oauth_tokens": 1,
-    "cad_outbox": 3,
+    "cad_outbox": 4,
     "cad_users": 1,
     "users": 8
   },
@@ -119,6 +119,14 @@
         "entity_id": "1391201462259810354",
         "entity_type": "cad_users",
         "id": 11
+      },
+      {
+        "action": "pager",
+        "actor_id": 1391201462259810354,
+        "details_json": null,
+        "entity_id": "police2",
+        "entity_type": "department",
+        "id": 12
       }
     ],
     "cad_bolos": [],
@@ -171,6 +179,11 @@
         "id": 3,
         "kind": "dm_code",
         "payload_json": "{\"user_id\": 1391201462259810354, \"code\": \"167176\"}"
+      },
+      {
+        "id": 4,
+        "kind": "pager",
+        "payload_json": "{\"department\": \"police2\", \"message\": \"Test\", \"paged_by\": \"\\ud835\\udcda\\ud835\\udcfe\\ud835\\udcf3\\ud835\\udcf8\"}"
       }
     ],
     "cad_pcrs": [],
@@ -222,7 +235,7 @@
         "discord_user_id": 1391201462259810354,
         "expires_at": "2026-10-27T11:13:20.473186+00:00",
         "id": "fd287743-fa6f-483c-aa21-bb821ee3c467",
-        "last_seen_at": "2026-10-26T23:43:59.433119+00:00",
+        "last_seen_at": "2026-10-26T23:52:35.169712+00:00",
         "token_hash": "0c9b27623113411d4ebf7015ed837b2727f2bd8c02f7942468c17f73832b7d60"
       }
     ],
