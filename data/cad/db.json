@@ -326,7 +326,7 @@
         "jti": "4eccb23f65854be89cc5d96b7c179c6b",
         "kind": "citation",
         "officer_id": 2,
-        "payload": "{\"agency\": \"Wytheville Police Department\", \"county\": \"WYTHE\", \"court_type\": \"General District Court (Traffic)\", \"court_month\": \"\", \"court_day\": \"\", \"court_year\": \"2026\", \"court_time\": \"\", \"am_pm\": \"AM\", \"va_code\": \"46.2-862\", \"local_code\": \"\", \"charge_description\": \"\", \"fine\": \"0\", \"commercial_motor_vehicle\": \"No\", \"hazardous_materials\": \"Yes\", \"resulted_in_fatality\": \"Yes\", \"highway_safety_corridor\": \"Yes\", \"issued_by\": \"Charlie Kirk\", \"kind\": \"citation\"}",
+        "payload": "{\"agency\": \"Wytheville Police Department\", \"county\": \"WYTHE\", \"court_type\": \"General District Court (Traffic)\", \"court_month\": \"\", \"court_day\": \"\", \"court_year\": \"2026\", \"court_time\": \"\", \"am_pm\": \"AM\", \"va_code\": \"46.2-862\", \"local_code\": \"\", \"charge_description\": \"\", \"fine\": \"12004829\", \"commercial_motor_vehicle\": \"Yes\", \"hazardous_materials\": \"Yes\", \"resulted_in_fatality\": \"Yes\", \"highway_safety_corridor\": \"Yes\", \"issued_by\": \"Charlie Kirk\", \"kind\": \"citation\"}",
         "subject_id": 3
       }
     ],
