@@ -1,0 +1,28 @@
+# Document editor only — not the old CAD site.
+services:
+  - type: web
+    name: vsrp-forms
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python forms_app.py
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: BOT_DATABASE
+        value: github
+      - key: PUBLIC_FORM_URL
+        sync: false
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: FORM_SECRET
+        sync: false
+      - key: GITHUB_REPO
+        value: hamburger445/VSRP-Bot
+      - key: GITHUB_DB_PATH
+        value: data/cad/db.json
+      - key: GITHUB_DB_BRANCH
+        value: cad-data

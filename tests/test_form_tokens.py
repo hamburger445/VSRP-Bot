@@ -27,14 +27,16 @@ def test_form_token_rejects_tamper(monkeypatch):
 
 
 def test_public_form_base(monkeypatch):
-    monkeypatch.delenv("SERVER_IP", raising=False)
-    monkeypatch.delenv("CONNECT_IP", raising=False)
-    monkeypatch.setenv("PUBLIC_FORM_URL", "http://example.test:8080/")
-    assert public_form_base() == "http://example.test:8080"
+    monkeypatch.setenv("PUBLIC_FORM_URL", "https://vsrp-forms.onrender.com/")
+    assert public_form_base() == "https://vsrp-forms.onrender.com"
 
 
-def test_public_form_base_rejects_localhost(monkeypatch):
+def test_public_form_base_rejects_localhost_and_http(monkeypatch):
     monkeypatch.setenv("PUBLIC_FORM_URL", "http://127.0.0.1:8080")
+    assert public_form_base() == ""
+    monkeypatch.setenv("PUBLIC_FORM_URL", "http://vsrp-forms.onrender.com")
+    assert public_form_base() == ""
+    monkeypatch.setenv("PUBLIC_FORM_URL", "https://1.2.3.4")
     assert public_form_base() == ""
 
 
@@ -47,6 +49,14 @@ def test_citation_pdf():
         issuer_label="officer",
     )
     assert data.startswith(b"%PDF")
+
+
+def test_editor_html_is_split_layout():
+    root = os.path.join(os.path.dirname(__file__), "..", "webforms", "editor.html")
+    text = open(root, encoding="utf-8").read()
+    assert "form-pane" in text
+    assert "preview-pane" in text
+    assert "/api/submit" in text
 
 
 def test_citation_html_placeholders():

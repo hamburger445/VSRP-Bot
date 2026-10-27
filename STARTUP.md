@@ -79,23 +79,23 @@ Local `python bot.py` does not auto-reload unless you set `DEPLOY_WATCH=1`.
 - `Authorization: Bearer ${GITHUB_TOKEN}` with an empty variable still sends `Bearer ` and GitHub returns 401.
 - A Discord bot token is not a GitHub PAT. Put a GitHub PAT in `GITHUB_TOKEN` only for the JSON database / private code.
 
-## 6. Paper citation / warrant website
+## 6. Document editor (Render HTTPS)
 
-`/citation`, `/warrant`, and `/serve-warrant` send the officer a **Open paper form** link. They fill a PDF-style page in the browser. Submit saves the record and posts the filled PDF into the Discord citations/warrants channel.
+The editor is **not** hosted on WispByte. That game port is why the browser sat on an infinite spinner. Deploy `forms_app.py` on Render (`render.yaml` service `vsrp-forms`).
 
-WispByte must allocate an **HTTP port** the public can reach:
+On **both** Render and WispByte set the same:
 
-| Variable | Notes |
-|----------|--------|
-| `SERVER_PORT` or `FORM_PORT` | Port the bot binds (default `8080`) |
-| `PUBLIC_FORM_URL` | Full URL officers open, e.g. `http://YOUR_ALLOCATION_IP:PORT` |
-| `SERVER_IP` | Used only if `PUBLIC_FORM_URL` is empty |
+```
+PUBLIC_FORM_URL=https://vsrp-forms.onrender.com
+FORM_SECRET=a-long-random-string
+DISCORD_TOKEN=...
+GITHUB_TOKEN=...
+BOT_DATABASE=github
+```
 
-`localhost` / `127.0.0.1` is ignored — Discord cannot open your panel machine. Use the node’s **public IP** plus the allocated port.
+Use the real `*.onrender.com` hostname Render shows after the first deploy (https only — not an IP, not localhost).
 
-Discord’s built-in window often fails on HTTP game-host ports. Officers should tap **Open in browser** (Chrome/Safari) or **Fill out in Discord**. Opening only `http://IP:PORT/` shows a status page; the real form is `/f/citation/...` from the command.
-
-Check `GET /health` on that URL after start.
+`/citation`, `/warrant`, `/serve-warrant`, and `/leo-form` send **Open document editor**. Submit saves a draft-capable record, posts the PDF to the citations/warrants channel, and adds Approve / Reject for LEO/staff.
 
 ## Why not `git clone`
 

@@ -22,8 +22,6 @@ from utils.permissions import is_leo
 def _paper_form_url(kind: str, interaction: discord.Interaction, member: discord.Member) -> str | None:
     if not interaction.guild_id:
         return None
-    if not getattr(interaction.client, "form_server_running", False):
-        return None
     token = sign_form_token(
         kind=kind,
         guild_id=interaction.guild_id,
@@ -40,7 +38,7 @@ class PaperFormView(discord.ui.View):
         self.member = member
         self.kind = kind
         self.rows = rows
-        self.add_item(discord.ui.Button(style=discord.ButtonStyle.link, label="Open in browser", url=url))
+        self.add_item(discord.ui.Button(style=discord.ButtonStyle.link, label="Open document editor", url=url))
 
     @discord.ui.button(label="Fill out in Discord", style=discord.ButtonStyle.primary)
     async def fill_discord(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -217,8 +215,7 @@ class LawEnforcement(commands.Cog):
             await reply(
                 interaction,
                 f"**Virginia Uniform Summons** for {member.mention}\n"
-                "Use **Open in browser** (Chrome/Safari — Discord’s built-in window often fails on HTTP).\n"
-                "Or **Fill out in Discord**.\n"
+                "Open the **document editor** (HTTPS). Left: form. Right: live paper preview.\n"
                 f"{url}",
                 view=PaperFormView(url, cog=self, member=member, kind="citation"),
                 ephemeral=True,
@@ -228,8 +225,33 @@ class LawEnforcement(commands.Cog):
         await reply(
             interaction,
             f"**Virginia Uniform Summons** for {member.mention}\n"
-            "Set `PUBLIC_FORM_URL` on the host to use the website. Filling in Discord for now.",
+            "Set PUBLIC_FORM_URL to the Render HTTPS URL (not an IP). Filling in Discord for now.",
             view=view,
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="leo-form", description="Open the document editor (citation, warrant, or served warrant)")
+    @app_commands.describe(member="Person the document is about")
+    async def leo_form(self, interaction: discord.Interaction, member: discord.Member):
+        if not is_leo(interaction.user):
+            await reply(interaction, "Law enforcement or staff only.", ephemeral=True)
+            return
+        if not await defer(interaction, ephemeral=True):
+            return
+        url = _paper_form_url("editor", interaction, member)
+        if url:
+            await reply(
+                interaction,
+                f"**Document editor** for {member.mention}\n"
+                "Pick citation, warrant, or served warrant on the site. Preview updates live.\n"
+                f"{url}",
+                view=PaperFormView(url, cog=self, member=member, kind="citation"),
+                ephemeral=True,
+            )
+            return
+        await reply(
+            interaction,
+            "Set PUBLIC_FORM_URL to your Render HTTPS URL (example: https://vsrp-forms.onrender.com).",
             ephemeral=True,
         )
 
@@ -246,8 +268,7 @@ class LawEnforcement(commands.Cog):
             await reply(
                 interaction,
                 f"**Warrant** for {member.mention}\n"
-                "Use **Open in browser** (Chrome/Safari — Discord’s built-in window often fails on HTTP).\n"
-                "Or **Fill out in Discord**.\n"
+                "Open the **document editor** (HTTPS). Left: form. Right: live paper preview.\n"
                 f"{url}",
                 view=PaperFormView(url, cog=self, member=member, kind="warrant"),
                 ephemeral=True,
@@ -258,7 +279,7 @@ class LawEnforcement(commands.Cog):
         await reply(
             interaction,
             f"**Warrant form** for {member.mention}\n"
-            "Set `PUBLIC_FORM_URL` on the host to use the website. Filling in Discord for now.",
+            "Set PUBLIC_FORM_URL to the Render HTTPS URL (not an IP). Filling in Discord for now.",
             view=view,
             ephemeral=True,
         )
@@ -290,8 +311,7 @@ class LawEnforcement(commands.Cog):
         if url:
             await reply(
                 interaction,
-                f"Record **served warrant** for {member.mention}.\n"
-                "Use **Open in browser** or **Fill out in Discord**.\n"
+                f"Record **served warrant** for {member.mention} in the document editor.\n"
                 f"{url}",
                 view=PaperFormView(url, cog=self, member=member, kind="serve", rows=rows),
                 ephemeral=True,

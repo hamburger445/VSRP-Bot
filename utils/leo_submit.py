@@ -33,18 +33,44 @@ async def _post_record(
     filename: str,
     *,
     channel_key: str,
+    review_id: int = 0,
+    bot: discord.Client | None = None,
 ) -> None:
+    from utils.form_discord import channel_id_for, post_channel_message, review_components
+
+    view = None
+    if review_id:
+        view = discord.ui.View(timeout=None)
+        view.add_item(discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"vsrpdoc:approve:{review_id}"))
+        view.add_item(discord.ui.Button(label="Reject", style=discord.ButtonStyle.danger, custom_id=f"vsrpdoc:reject:{review_id}"))
     posted = False
     channel_id = load_config().get("channels", {}).get(channel_key)
     if channel_id and guild:
         ch = guild.get_channel(channel_id)
         if ch:
             try:
-                await ch.send(embed=embed, file=pdf_file(pdf, filename))
+                kwargs = {"embed": embed, "file": pdf_file(pdf, filename)}
+                if view:
+                    kwargs["view"] = view
+                await ch.send(**kwargs)
                 posted = True
             except discord.HTTPException:
                 log.exception("Could not post %s to channel %s", channel_key, channel_id)
+    if not posted:
+        cid = channel_id_for(channel_key)
+        if cid:
+            posted = bool(
+                await post_channel_message(
+                    cid,
+                    embed=embed.to_dict(),
+                    filename=filename,
+                    file_bytes=pdf,
+                    components=review_components(review_id) if review_id else None,
+                )
+            )
     if posted:
+        return
+    if bot is None:
         return
     try:
         await officer.send(embed=embed, file=pdf_file(pdf, filename))
@@ -61,13 +87,15 @@ def _guild_member(bot: discord.Client, guild: discord.Guild | None, user_id: int
 
 
 async def submit_citation(
-    bot: discord.Client,
+    bot: discord.Client | None,
     *,
     guild: discord.Guild | None,
     officer: discord.abc.User,
     subject: discord.abc.User,
     form_data: dict,
     fine: int,
+    jti: str = "",
+    guild_id: int = 0,
 ) -> dict:
     from utils.leo_records import create_citation
 
@@ -96,42 +124,57 @@ async def submit_citation(
         issuer_label=officer.display_name,
     )
     filename = f"summons-{format_case_number(case_no)}.pdf"
-    await notify_citation_issued(
-        bot,
-        subject.id,
-        ticket_id=ticket_id,
-        violation=violation,
-        fine=fine,
-        issued_by=officer.display_name,
-        guild=guild,
+    if bot is not None:
+        await notify_citation_issued(
+            bot,
+            subject.id,
+            ticket_id=ticket_id,
+            violation=violation,
+            fine=fine,
+            issued_by=officer.display_name,
+            guild=guild,
+        )
+        if guild:
+            await enforce_ticket_thresholds(bot, guild, subject.id)
+        await log_action(
+            bot,
+            "citation_ticket",
+            officer.id,
+            target_id=subject.id,
+            details={"case_number": case_no, "violation": violation, "fine": fine},
+            channel_key="tickets",
+        )
+    from utils.form_store import create_review
+
+    review_id = await create_review(
+        kind="citation",
+        case_number=format_case_number(case_no),
+        officer_id=int(officer.id),
+        subject_id=int(subject.id),
+        guild_id=int(guild.id if guild else guild_id or 0),
+        jti=jti or f"cite-{ticket_id}",
+        record_id=ticket_id,
     )
-    if guild:
-        await enforce_ticket_thresholds(bot, guild, subject.id)
-    await log_action(
-        bot,
-        "citation_ticket",
-        officer.id,
-        target_id=subject.id,
-        details={"case_number": case_no, "violation": violation, "fine": fine},
-        channel_key="tickets",
-    )
-    await _post_record(guild, officer, embed, pdf, filename, channel_key="citations")
+    await _post_record(guild, officer, embed, pdf, filename, channel_key="citations", review_id=review_id, bot=bot)
     return {
         "case_number": format_case_number(case_no),
         "ticket_id": ticket_id,
         "pdf": pdf,
         "filename": filename,
         "embed": embed,
+        "review_id": review_id,
     }
 
 
 async def submit_warrant(
-    bot: discord.Client,
+    bot: discord.Client | None,
     *,
     guild: discord.Guild | None,
     officer: discord.abc.User,
     subject: discord.abc.User,
     form_data: dict,
+    jti: str = "",
+    guild_id: int = 0,
 ) -> dict:
     from utils.leo_records import create_warrant
 
@@ -160,37 +203,52 @@ async def submit_warrant(
         reason=reason,
     )
     filename = f"warrant-{format_case_number(case_no)}.pdf"
-    await notify_warrant_issued(
-        bot,
-        subject.id,
-        reason=reason,
-        issued_by=officer.display_name,
-        guild=guild,
+    if bot is not None:
+        await notify_warrant_issued(
+            bot,
+            subject.id,
+            reason=reason,
+            issued_by=officer.display_name,
+            guild=guild,
+        )
+        await log_action(
+            bot,
+            "warrant",
+            officer.id,
+            target_id=subject.id,
+            details={"case_number": case_no, "reason": reason},
+        )
+    from utils.form_store import create_review
+
+    review_id = await create_review(
+        kind="warrant",
+        case_number=format_case_number(case_no),
+        officer_id=int(officer.id),
+        subject_id=int(subject.id),
+        guild_id=int(guild.id if guild else guild_id or 0),
+        jti=jti or f"war-{warrant_id}",
+        record_id=warrant_id,
     )
-    await log_action(
-        bot,
-        "warrant",
-        officer.id,
-        target_id=subject.id,
-        details={"case_number": case_no, "reason": reason},
-    )
-    await _post_record(guild, officer, embed, pdf, filename, channel_key="warrants")
+    await _post_record(guild, officer, embed, pdf, filename, channel_key="warrants", review_id=review_id, bot=bot)
     return {
         "case_number": format_case_number(case_no),
         "warrant_id": warrant_id,
         "pdf": pdf,
         "filename": filename,
         "embed": embed,
+        "review_id": review_id,
     }
 
 
 async def submit_serve_warrant(
-    bot: discord.Client,
+    bot: discord.Client | None,
     *,
     guild: discord.Guild | None,
     officer: discord.abc.User,
     warrant_id: int,
     serve_data: dict,
+    jti: str = "",
+    guild_id: int = 0,
 ) -> dict:
     db = await get_db()
     warrant_row = await db.execute_fetchone("SELECT * FROM warrants WHERE id = ?", (warrant_id,))
@@ -211,7 +269,7 @@ async def submit_serve_warrant(
     if result.rowcount == 0:
         raise ValueError("This warrant has already been served")
     user_id = int(warrant_row["user_id"])
-    member = _guild_member(bot, guild, user_id)
+    member = _guild_member(bot, guild, user_id) if bot is not None else None
     embed = build_served_warrant_embed(
         form_data,
         serve_data,
@@ -225,18 +283,31 @@ async def submit_serve_warrant(
         subject_label=str(member) if member else str(user_id),
     )
     filename = f"served-warrant-{format_case_number(case_no)}.pdf"
-    await _post_record(guild, officer, embed, pdf, filename, channel_key="warrants")
-    await log_action(
-        bot,
-        "warrant_served",
-        officer.id,
-        target_id=user_id,
-        details={"warrant_id": warrant_id, "case_number": case_no},
+    from utils.form_store import create_review
+
+    review_id = await create_review(
+        kind="serve",
+        case_number=format_case_number(case_no),
+        officer_id=int(officer.id),
+        subject_id=user_id,
+        guild_id=int(guild.id if guild else guild_id or 0),
+        jti=jti or f"serve-{warrant_id}",
+        record_id=warrant_id,
     )
+    await _post_record(guild, officer, embed, pdf, filename, channel_key="warrants", review_id=review_id, bot=bot)
+    if bot is not None:
+        await log_action(
+            bot,
+            "warrant_served",
+            officer.id,
+            target_id=user_id,
+            details={"warrant_id": warrant_id, "case_number": case_no},
+        )
     return {
         "case_number": format_case_number(case_no),
         "warrant_id": warrant_id,
         "pdf": pdf,
         "filename": filename,
         "embed": embed,
+        "review_id": review_id,
     }

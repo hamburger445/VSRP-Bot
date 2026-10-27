@@ -1,13 +1,15 @@
-"""Start the paper-forms website next to the Discord gateway."""
+"""Document-editor links and Discord approve/reject buttons. HTTP is Render, not WispByte."""
 
 from __future__ import annotations
 
 import logging
 
+import discord
 from discord.ext import commands
 
-from utils.form_server import start_form_server
-from utils.form_urls import form_bind_port, public_form_base
+from utils.form_store import get_review, set_review_status
+from utils.form_urls import public_form_base
+from utils.permissions import is_leo, is_staff
 
 log = logging.getLogger("vsrp_bot.webforms")
 
@@ -15,23 +17,54 @@ log = logging.getLogger("vsrp_bot.webforms")
 class WebForms(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self._runner = None
 
     async def cog_load(self):
-        self.bot.form_server_running = False
-        try:
-            self._runner = await start_form_server(self.bot)
-            self.bot.form_server_running = True
-            base = public_form_base() or f"(set PUBLIC_FORM_URL; listening on port {form_bind_port()})"
-            log.info("Officers open forms at %s", base)
-        except OSError:
-            log.exception("Could not bind the forms website (port in use or not allocated)")
-            self._runner = None
+        base = public_form_base()
+        self.bot.form_server_running = bool(base)
+        if base:
+            log.info("Document editor: %s", base)
+        else:
+            log.warning("PUBLIC_FORM_URL is missing or not public HTTPS. Discord will use in-app forms.")
 
-    async def cog_unload(self):
-        if self._runner:
-            await self._runner.cleanup()
-            self._runner = None
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        if interaction.type != discord.InteractionType.component:
+            return
+        cid = ""
+        if interaction.data:
+            cid = str(interaction.data.get("custom_id") or "")
+        if not cid.startswith("vsrpdoc:"):
+            return
+        parts = cid.split(":")
+        if len(parts) != 3:
+            return
+        _, action, raw_id = parts
+        if not is_leo(interaction.user) and not is_staff(interaction.user):
+            await interaction.response.send_message("Only law enforcement or staff can review documents.", ephemeral=True)
+            return
+        try:
+            review_id = int(raw_id)
+        except ValueError:
+            return
+        row = await get_review(review_id)
+        if not row:
+            await interaction.response.send_message("That submission was not found.", ephemeral=True)
+            return
+        if row.get("status") != "pending":
+            await interaction.response.send_message(f"Already {row.get('status')}.", ephemeral=True)
+            return
+        status = "approved" if action == "approve" else "rejected"
+        updated = await set_review_status(review_id, status, interaction.user.id)
+        if not updated or updated.get("status") != status:
+            await interaction.response.send_message("Could not update this review.", ephemeral=True)
+            return
+        color = 0x27AE60 if status == "approved" else 0x992D22
+        embed = discord.Embed(
+            title=f"Document {status}",
+            description=f"Case **#{row.get('case_number')}** ({row.get('kind')}) was **{status}** by {interaction.user.mention}.",
+            color=color,
+        )
+        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot: commands.Bot):

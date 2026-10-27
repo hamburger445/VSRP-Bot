@@ -60,9 +60,10 @@ Roleplay sessions (main, staff)
 Law enforcement (LEO)
 ---------------------
 - /leo-panel — panel for LEO actions.
-- /citation — opens a paper Uniform Summons website; submit posts the filled PDF to Discord.
-- /warrant — opens a paper warrant website; submit posts the filled PDF to Discord.
-- /serve-warrant — opens a served-warrant website (🟢 on record; no longer active). Posts a served-warrant PDF.
+- /citation — HTTPS document editor (form + live preview); PDF posts to Discord for LEO review.
+- /warrant — HTTPS warrant editor; PDF posts to Discord for review.
+- /serve-warrant — served-warrant editor (🟢 on record; no longer active).
+- /leo-form — pick citation, warrant, or served warrant on the website.
 - /removewarrant — administratively clear active warrant (⚪ on record).
 - /warrant-check — full warrant history with 🔴 active / 🟢 served / ⚪ cleared.
 - /pager send — page a department.
