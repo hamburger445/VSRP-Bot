@@ -1,6 +1,7 @@
 {
   "seq": {
     "SET": 14,
+    "bot_state": 1,
     "cad_audit": 12,
     "cad_dm_codes": 3,
     "cad_oauth_tokens": 1,
@@ -31,7 +32,15 @@
         "username": "mr.kujo1"
       }
     ],
+    "applications": [],
     "audit_logs": [],
+    "bot_state": [
+      {
+        "id": 1,
+        "key": "shift_banned_role_id:1514304919568384100",
+        "value": "1556367929157750927"
+      }
+    ],
     "cad_audit": [
       {
         "action": "login",
@@ -260,6 +269,8 @@
     ],
     "citation_tickets": [],
     "guild_settings": [],
+    "mod_appeals": [],
+    "mod_cases": [],
     "shift_sessions": [],
     "shop_items": [
       {
