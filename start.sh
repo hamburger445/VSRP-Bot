@@ -141,4 +141,13 @@ elif [[ ! -f /home/container/config.yaml ]]; then
 fi
 
 echo "[Bot] Starting (slash commands sync automatically on startup)..."
-exec "${PYTHON}" /home/container/bot.py
+RESTART_CODE="${DEPLOY_EXIT_CODE:-42}"
+set +e
+"${PYTHON}" /home/container/bot.py
+code=$?
+set -e
+if [[ "${code}" -eq "${RESTART_CODE}" ]]; then
+  echo "[Deploy] GitHub changed — re-running startup to pull latest..."
+  exec bash /home/container/start.sh
+fi
+exit "${code}"

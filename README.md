@@ -47,7 +47,7 @@ Python Discord bot for urban roleplay servers. Uses a GitHub JSON database by de
 
 Code lives at [hamburger445/VSRP-Bot](https://github.com/hamburger445/VSRP-Bot).
 
-When `GITHUB_TOKEN` is set, permission changes from `/setup-permissions` and `-role` are also saved to JSON files in the repo (`data/guild_permissions/`). PostgreSQL remains the primary database for all other bot data.
+When `GITHUB_TOKEN` is set, permission changes from `/setup-permissions` and `-role` are also saved to JSON files in the repo (`data/guild_permissions/`).
 
 **Never commit `.env` or tokens to GitHub.**
 
@@ -57,9 +57,9 @@ With `BOT_DATABASE=github` and `GITHUB_TOKEN`, the bot stores records as JSON in
 
 `/warrant` and `/serve-warrant` attach a filled roleplay PDF in the warrants channel.
 
-## Container hosting (GitHub pull on start)
+## WispByte / panel hosting
 
-See [STARTUP.md](STARTUP.md) for the panel startup command and env vars (`GITHUB_TOKEN`, `GITHUB_REPO`, etc.).
+See [STARTUP.md](STARTUP.md). The server runs `bash panel-start.sh`, which pulls GitHub on boot and restarts the bot when you push to `main`.
 
 ## Config Notes
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Panel startup: cd /home/container && bash panel-start.sh
+# WispByte / Pterodactyl startup:
+#   cd /home/container && bash panel-start.sh
+# Pulls GitHub on each boot. If the bot exits 42 (new commit), pull again and restart.
 set -euo pipefail
 cd /home/container
 
@@ -8,10 +10,12 @@ R="${GITHUB_REPO:-hamburger445/VSRP-Bot}"
 B="${GITHUB_BRANCH:-main}"
 REQ="${REQUIREMENTS_FILE:-requirements.txt}"
 PY="${PYTHON:-/usr/local/bin/python}"
+RESTART_CODE="${DEPLOY_EXIT_CODE:-42}"
 
 T="$(mktemp -d)"
 A="$T/a.tar.gz"
-trap 'rm -rf "$T"' EXIT
+cleanup_tmp() { rm -rf "$T"; }
+trap cleanup_tmp EXIT
 
 _download_auth() {
   echo "[GitHub] Downloading ${R} (${B}) with token..."
@@ -29,56 +33,104 @@ _download_public() {
     -o "$A"
 }
 
-if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-  if ! _download_auth; then
-    echo "[GitHub] Token download failed (401 = bad/expired token or wrong scopes)."
-    echo "[GitHub] Trying public archive URL..."
+_fetch_sha() {
+  "$PY" - <<'PY' || true
+import json, os, urllib.request
+repo = os.environ.get("GITHUB_REPO", "hamburger445/VSRP-Bot")
+branch = os.environ.get("GITHUB_BRANCH", "main")
+token = os.environ.get("GITHUB_TOKEN", "")
+url = f"https://api.github.com/repos/{repo}/commits/{branch}"
+headers = {"Accept": "application/vnd.github+json", "User-Agent": "vsrp-panel-start"}
+if token:
+    headers["Authorization"] = f"Bearer {token}"
+req = urllib.request.Request(url, headers=headers)
+try:
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        sha = json.load(resp).get("sha") or ""
+except Exception as exc:
+    print("[GitHub] Could not read commit SHA:", exc)
+    sha = ""
+open(".deploy-sha", "w", encoding="utf-8").write(sha)
+print("[GitHub] Running commit", sha[:12] if sha else "(unknown)")
+PY
+}
+
+_sync() {
+  rm -f "$A"
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    if ! _download_auth; then
+      echo "[GitHub] Token download failed (401 = bad/expired token or wrong scopes)."
+      echo "[GitHub] Trying public archive URL..."
+      _download_public
+    fi
+  else
+    echo "[GitHub] GITHUB_TOKEN not set in panel — using public download."
+    echo "         (Private repos: add GITHUB_TOKEN in panel Variables, not only .env)"
     _download_public
   fi
-else
-  echo "[GitHub] GITHUB_TOKEN not set in panel — using public download."
-  echo "         (Private repos: add GITHUB_TOKEN in panel Variables, not only .env)"
-  _download_public
-fi
 
-echo "[GitHub] Extracting..."
-tar -xzf "$A" -C "$T"
-S="$(find "$T" -mindepth 1 -maxdepth 1 -type d | head -1)"
-if [[ -z "$S" || ! -d "$S" ]]; then
-  echo "[GitHub] ERROR: bad archive."
-  exit 1
-fi
+  echo "[GitHub] Extracting..."
+  tar -xzf "$A" -C "$T"
+  local S
+  S="$(find "$T" -mindepth 1 -maxdepth 1 -type d | head -1)"
+  if [[ -z "$S" || ! -d "$S" ]]; then
+    echo "[GitHub] ERROR: bad archive."
+    exit 1
+  fi
 
-echo "[GitHub] Installing files (keeping .env and config.yaml if present)..."
-shopt -s dotglob nullglob
-for f in "$S"/*; do
-  n="$(basename "$f")"
-  if [[ "$n" == ".env" || "$n" == "config.yaml" ]] && [[ -e "$n" ]]; then
-    echo "  skip $n"
+  echo "[GitHub] Installing files (keeping .env and config.yaml if present)..."
+  shopt -s dotglob nullglob
+  local f n
+  for f in "$S"/*; do
+    n="$(basename "$f")"
+    if [[ "$n" == ".env" || "$n" == "config.yaml" ]] && [[ -e "$n" ]]; then
+      echo "  skip $n"
+      continue
+    fi
+    rm -rf "$n" 2>/dev/null || true
+    cp -a "$f" .
+  done
+  shopt -u dotglob nullglob 2>/dev/null || true
+
+  if [[ ! -f "$REQ" ]]; then
+    echo "[Python] ERROR: ${REQ} not found."
+    exit 1
+  fi
+
+  echo "[Python] pip install -r ${REQ}..."
+  pip install -U --user -r "$REQ"
+
+  if [[ ! -f bot.py ]]; then
+    echo "[Bot] ERROR: bot.py missing."
+    exit 1
+  fi
+
+  if [[ ! -f config.yaml ]] && [[ -f config.example.yaml ]]; then
+    cp config.example.yaml config.yaml
+    echo "[Config] Created config.yaml from config.example.yaml"
+  fi
+
+  _fetch_sha
+}
+
+export GITHUB_REPO="$R"
+export GITHUB_BRANCH="$B"
+
+while true; do
+  T="$(mktemp -d)"
+  A="$T/a.tar.gz"
+  _sync
+  echo "[Bot] Starting (slash commands sync on startup; deploy watch polls GitHub)..."
+  set +e
+  "$PY" /home/container/bot.py
+  code=$?
+  set -e
+  rm -rf "$T"
+  if [[ "$code" -eq "$RESTART_CODE" ]]; then
+    echo "[Deploy] GitHub changed — pulling latest and restarting bot..."
+    sleep 2
     continue
   fi
-  rm -rf "$n" 2>/dev/null || true
-  cp -a "$f" .
+  echo "[Bot] Exited with code ${code}"
+  exit "$code"
 done
-shopt -u dotglob nullglob 2>/dev/null || true
-
-if [[ ! -f "$REQ" ]]; then
-  echo "[Python] ERROR: ${REQ} not found."
-  exit 1
-fi
-
-echo "[Python] pip install -r ${REQ}..."
-pip install -U --user -r "$REQ"
-
-if [[ ! -f bot.py ]]; then
-  echo "[Bot] ERROR: bot.py missing."
-  exit 1
-fi
-
-if [[ ! -f config.yaml ]] && [[ -f config.example.yaml ]]; then
-  cp config.example.yaml config.yaml
-  echo "[Config] Created config.yaml from config.example.yaml"
-fi
-
-echo "[Bot] Starting (config merges from config.example.yaml; slash commands sync on startup)..."
-exec "$PY" /home/container/bot.py

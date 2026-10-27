@@ -1,75 +1,76 @@
-# Container startup (GitHub deploy)
+# Host on WispByte (GitHub pull + auto-restart)
 
-Many panels **hang forever on `git clone`** (no TTY, blocked git, or private repo without token). Use **`start.sh`**, which downloads a **tarball with curl** instead.
+Run this bot on a **Python egg** (WispByte, Pterodactyl, or similar). Each start downloads the latest `main` tarball from GitHub. After the bot is online it checks GitHub about once a minute. When you push a new commit, the bot exits code **42**, the startup script pulls the new files, and the bot starts again. You do not need to click Restart for a normal code deploy.
 
-## Panel environment variables
+Do **not** put `git clone` in the startup command. Panels hang on that.
+
+## 1. Create the server
+
+1. WispByte → create a server with a **Python** egg (3.11+ if you can choose).
+2. The image needs `python`, `pip`, `curl`, `bash`, and `tar`.
+3. Working directory is `/home/container`.
+
+## 2. Panel variables
+
+Set these under **Variables**. The GitHub pull runs **before** Python reads `.env`, so `GITHUB_TOKEN` must live in the panel.
 
 | Variable | Required | Notes |
 |----------|----------|--------|
-| `DISCORD_TOKEN` | Yes | Bot token (or in `.env`) |
-| `DATABASE_URL` | Yes | PostgreSQL URL (or in `.env`) |
-| `GITHUB_TOKEN` | **Private repo** | PAT with `repo` scope — set in **panel**, not only `.env` (clone runs before `.env` exists) |
+| `DISCORD_TOKEN` | Yes | Bot token |
+| `GITHUB_TOKEN` | Yes if the repo is private | PAT with `repo` (or `contents:read`). Also used for the JSON database. |
 | `GITHUB_REPO` | No | Default `hamburger445/VSRP-Bot` |
 | `GITHUB_BRANCH` | No | Default `main` |
-| `REQUIREMENTS_FILE` | No | Default `requirements.txt` |
+| `BOT_DATABASE` | No | Default `github` |
+| `GITHUB_DB_PATH` | No | Default `data/cad/db.json` |
+| `GITHUB_DB_BRANCH` | No | Default `cad-data` (bot records, not code) |
+| `DEPLOY_WATCH` | No | Auto-on when `.deploy-sha` exists; set `0` to disable |
+| `DEPLOY_POLL_SECONDS` | No | Default `60` |
+| `PYTHON` | No | Default `/usr/local/bin/python` |
 
-Upload **`config.yaml`** and **`.env`** once via SFTP. Restarts **keep** existing `.env` and **`config.yaml`** when updating code, but the bot **merges new keys** from **`config.example.yaml`** into **`config.yaml`** on each start (your existing values are never overwritten).
+Upload **`config.yaml`** and **`.env`** once via SFTP. Restarts keep those two files. New keys from `config.example.yaml` are merged in; existing values are not overwritten.
 
-If **`config.yaml`** is missing, the panel script copies **`config.example.yaml`** automatically.
+If `config.yaml` is missing, the script copies `config.example.yaml`.
 
----
+## 3. Startup command
 
-## Fix: curl 401
-
-**401** = GitHub rejected the token.
-
-1. In **Wispbyte → Server → Variables**, add **`GITHUB_TOKEN`** (PAT with **repo** scope).  
-   The startup script runs **before** `.env` is read — the token must be in the **panel**, not only in `.env`.
-
-2. **Or** make the repo **public** on GitHub — then leave `GITHUB_TOKEN` empty; the script uses the public tarball URL.
-
-3. Regenerate the token if it was revoked or pasted wrong (no spaces).
-
----
-
-## Recommended startup command
-
-Set the panel **Startup** to:
+**Startup** field (use this after the first successful boot):
 
 ```bash
 cd /home/container && bash panel-start.sh
 ```
 
-**First boot:** the server has no `panel-start.sh` yet. Use this **once**, then switch to the line above:
+**First boot only** — the disk is empty, so `panel-start.sh` is not there yet. Paste this, start once, then switch Startup back to the line above.
+
+Private repo:
 
 ```bash
-cd /home/container && curl -fSL --connect-timeout 20 --max-time 300 -H "Authorization: Bearer ${GITHUB_TOKEN}" -L "https://api.github.com/repos/hamburger445/VSRP-Bot/tarball/main" -o /tmp/v.tar.gz && tar -xzf /tmp/v.tar.gz -C /tmp && cp -a $(find /tmp -mindepth 1 -maxdepth 1 -type d | head -1)/panel-start.sh . && bash panel-start.sh
+cd /home/container && curl -fSL --connect-timeout 20 --max-time 300 -H "Authorization: Bearer ${GITHUB_TOKEN}" -L "https://api.github.com/repos/hamburger445/VSRP-Bot/tarball/main" -o /tmp/v.tar.gz && tar -xzf /tmp/v.tar.gz -C /tmp && cp -a "$(find /tmp -mindepth 1 -maxdepth 1 -type d | head -1)"/panel-start.sh . && bash panel-start.sh
 ```
 
-Or use this one-liner (public repo, **no token**):
+Public repo:
 
 ```bash
-cd /home/container && bash -c 'export GIT_TERMINAL_PROMPT=0; R="${GITHUB_REPO:-hamburger445/VSRP-Bot}"; B="${GITHUB_BRANCH:-main}"; T=$(mktemp -d); A="$T/a.tar.gz"; curl -fSL --connect-timeout 20 --max-time 300 -L "https://github.com/${R}/archive/refs/heads/${B}.tar.gz" -o "$A" || exit 1; tar -xzf "$A" -C "$T"; S=$(find "$T" -mindepth 1 -maxdepth 1 -type d | head -1); for f in "$S"/*; do n=$(basename "$f"); [[ "$n" == ".env" || "$n" == "config.yaml" ]] && [[ -e "$n" ]] && continue; rm -rf "$n" 2>/dev/null; cp -a "$f" .; done; rm -rf "$T"; pip install -U --user -r "${REQUIREMENTS_FILE:-requirements.txt}"; exec /usr/local/bin/python /home/container/bot.py'
+cd /home/container && curl -fSL --connect-timeout 20 --max-time 300 -L "https://github.com/hamburger445/VSRP-Bot/archive/refs/heads/main.tar.gz" -o /tmp/v.tar.gz && tar -xzf /tmp/v.tar.gz -C /tmp && cp -a "$(find /tmp -mindepth 1 -maxdepth 1 -type d | head -1)"/panel-start.sh . && bash panel-start.sh
 ```
 
-Private repo one-liner (requires **`GITHUB_TOKEN` in panel**):
+## 4. How a deploy works
 
-```bash
-cd /home/container && bash -c 'export GIT_TERMINAL_PROMPT=0; R="${GITHUB_REPO:-hamburger445/VSRP-Bot}"; B="${GITHUB_BRANCH:-main}"; T=$(mktemp -d); A="$T/a.tar.gz"; curl -fSL --connect-timeout 20 --max-time 300 -H "Authorization: Bearer ${GITHUB_TOKEN}" -L "https://api.github.com/repos/${R}/tarball/${B}" -o "$A" || exit 1; tar -xzf "$A" -C "$T"; S=$(find "$T" -mindepth 1 -maxdepth 1 -type d | head -1); for f in "$S"/*; do n=$(basename "$f"); [[ "$n" == ".env" || "$n" == "config.yaml" ]] && [[ -e "$n" ]] && continue; rm -rf "$n" 2>/dev/null; cp -a "$f" .; done; rm -rf "$T"; pip install -U --user -r "${REQUIREMENTS_FILE:-requirements.txt}"; exec /usr/local/bin/python /home/container/bot.py'
-```
+1. You push to `main` on GitHub.
+2. Within about a minute the running bot sees a new commit SHA.
+3. Console shows `New GitHub commit … — exiting 42`.
+4. `panel-start.sh` is still running: it downloads the new tarball, runs `pip install`, and starts `bot.py` again.
+5. The WispByte server stays **online** through that reload.
 
----
+A crash (any exit code other than 42) stops the server so you can read the log. Enable the panel **restart on crash** option if you also want those to come back by themselves.
 
-## Why `git clone` stuck
+Local `python bot.py` does not auto-reload unless you set `DEPLOY_WATCH=1`.
 
-- **Private repo** without `GITHUB_TOKEN` in the **panel** → git waits for a password forever.
-- **No `GIT_TERMINAL_PROMPT=0`** → same hang.
-- Some hosts block or throttle **git://** or long git HTTPS.
+## 5. 401 from GitHub
 
-`start.sh` uses **curl + tarball** (20s connect, 300s max by default) and prints a clear error if download fails.
+1. Put `GITHUB_TOKEN` in **panel Variables**.
+2. Or make the repo public for the code tarball (you still need a token for the JSON database).
+3. Regenerate the PAT if it was revoked.
 
----
+## Why not `git clone`
 
-## Optional: git updates
-
-If you prefer git after the first curl sync, set `USE_GIT_SYNC=1` and keep a `.git` folder (advanced). Default is tarball every start.
+A private repo without a panel token waits for a password forever. `panel-start.sh` uses **curl + tarball** with timeouts.

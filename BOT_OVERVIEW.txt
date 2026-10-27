@@ -143,7 +143,7 @@ Setup & deploy
 --------------
 - Config in config.yaml (new keys merge from config.example.yaml on bot start).
 - GitHub JSON database (`BOT_DATABASE=github`, `data/cad/db.json` on `cad-data`) for cases, economy, tickets, warrants, etc.
-- GitHub deploy: panel pulls latest code, keeps .env and config.yaml, runs bot.
+- GitHub deploy: WispByte runs `panel-start.sh` (curl tarball). A new push to main reloads the bot automatically.
 - Permissions can mirror to GitHub data folder when saved.
 
 

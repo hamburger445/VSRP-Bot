@@ -191,6 +191,10 @@ class VSRPBot(commands.Bot):
             self._shift_ban_infra_started = True
             self.loop.create_task(self._provision_shift_ban_infrastructure())
 
+        if not getattr(self, "_deploy_watch_started", False):
+            self._deploy_watch_started = True
+            self.loop.create_task(self._deploy_watch())
+
     async def _preload_permissions(self) -> None:
         from utils.permissions import load_guild_permissions
 
@@ -221,6 +225,12 @@ class VSRPBot(commands.Bot):
             except Exception:
                 log.exception("Expiration check failed")
             await asyncio.sleep(3600)
+
+    async def _deploy_watch(self) -> None:
+        from utils.deploy_watch import deploy_watch_loop
+
+        await self.wait_until_ready()
+        await deploy_watch_loop()
 
     async def close(self):
         await close_db()
