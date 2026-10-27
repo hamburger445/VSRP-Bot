@@ -1,0 +1,66 @@
+:root { --ink: #1a1a1a; --rule: #3d341f; --paper: #f4efdf; --muted: #5c5346; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #2b2b2b;
+  color: var(--ink);
+  font-family: "Times New Roman", Times, serif;
+}
+.page {
+  max-width: 820px;
+  margin: 24px auto 48px;
+  background: var(--paper);
+  border: 2px solid #111;
+  padding: 28px 36px 40px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.35);
+}
+h1 { text-align: center; font-size: 22px; letter-spacing: .08em; margin: 0 0 4px; }
+.sub { text-align: center; font-size: 12px; color: var(--muted); margin: 0 0 18px; font-style: italic; }
+h2 {
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--rule);
+  margin: 22px 0 10px;
+  padding-bottom: 4px;
+}
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+.span { grid-column: 1 / -1; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+input, select, textarea {
+  font-family: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border: none;
+  border-bottom: 1px solid var(--ink);
+  background: transparent;
+  text-transform: none;
+  letter-spacing: 0;
+}
+textarea { min-height: 64px; border: 1px solid var(--ink); resize: vertical; }
+.checks { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 14px; text-transform: none; letter-spacing: 0; }
+.checks label { flex-direction: row; align-items: center; text-transform: none; letter-spacing: 0; font-size: 14px; }
+button {
+  margin-top: 22px;
+  width: 100%;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  background: #1a1a1a;
+  color: #f4efdf;
+  border: 0;
+  cursor: pointer;
+}
+.err { color: #8b1e1e; font-weight: 700; }
+.ok { color: #14532d; }
+.meta { font-size: 13px; margin-bottom: 8px; }
+@media (max-width: 700px) {
+  .grid { grid-template-columns: 1fr; }
+  .page { margin: 0; border: 0; }
+}
+@media print {
+  body { background: #fff; }
+  button { display: none; }
+  .page { box-shadow: none; margin: 0; }
+}

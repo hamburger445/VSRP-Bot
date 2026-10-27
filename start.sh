@@ -143,14 +143,20 @@ elif [[ ! -f /home/container/config.yaml ]]; then
   echo "[Bot] WARNING: config.yaml missing — upload it or copy from config.example.yaml."
 fi
 
-echo "[Bot] Starting (slash commands sync automatically on startup)..."
+export DEPLOY_WATCH="${DEPLOY_WATCH:-1}"
+export DEPLOY_POLL_SECONDS="${DEPLOY_POLL_SECONDS:-20}"
 RESTART_CODE="${DEPLOY_EXIT_CODE:-42}"
-set +e
-"${PYTHON}" /home/container/bot.py
-code=$?
-set -e
-if [[ "${code}" -eq "${RESTART_CODE}" ]]; then
-  echo "[Deploy] GitHub changed — re-running startup to pull latest..."
-  exec bash /home/container/start.sh
-fi
-exit "${code}"
+
+while true; do
+  echo "[Bot] Starting (slash commands sync automatically on startup)..."
+  set +e
+  "${PYTHON}" /home/container/bot.py
+  code=$?
+  set -e
+  if [[ "${code}" -eq "${RESTART_CODE}" ]]; then
+    echo "[Deploy] GitHub changed — pulling latest and restarting bot..."
+    exec bash /home/container/start.sh
+  fi
+  echo "[Bot] Exited with code ${code}"
+  exit "${code}"
+done

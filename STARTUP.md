@@ -23,8 +23,8 @@ Set these under **Variables**. The GitHub pull runs **before** Python reads `.en
 | `BOT_DATABASE` | No | Default `github` |
 | `GITHUB_DB_PATH` | No | Default `data/cad/db.json` |
 | `GITHUB_DB_BRANCH` | No | Default `cad-data` (bot records, not code) |
-| `DEPLOY_WATCH` | No | Auto-on when `.deploy-sha` exists; set `0` to disable |
-| `DEPLOY_POLL_SECONDS` | No | Default `60` |
+| `DEPLOY_WATCH` | No | Default **on** on WispByte (`1`). Set `0` to disable |
+| `DEPLOY_POLL_SECONDS` | No | Default `20` — new GitHub commit exits 42 and the startup script re-pulls |
 | `PYTHON` | No | Default `/usr/local/bin/python` |
 
 You must give the bot a Discord token **on the panel**. The GitHub download does not include `.env`.
@@ -60,7 +60,7 @@ If the repo is **private**, do not send a Bearer header unless `GITHUB_TOKEN` is
 ## 4. How a deploy works
 
 1. You push to `main` on GitHub.
-2. Within about a minute the running bot sees a new commit SHA.
+2. Within about 20 seconds the running bot sees a new commit SHA.
 3. Console shows `New GitHub commit … — exiting 42`.
 4. `panel-start.sh` is still running: it downloads the new tarball, runs `pip install`, and starts `bot.py` again.
 5. The WispByte server stays **online** through that reload.
@@ -78,6 +78,22 @@ Local `python bot.py` does not auto-reload unless you set `DEPLOY_WATCH=1`.
 - This repo is public. Use the **public** archive URL in section 3 (no `-H Authorization`).
 - `Authorization: Bearer ${GITHUB_TOKEN}` with an empty variable still sends `Bearer ` and GitHub returns 401.
 - A Discord bot token is not a GitHub PAT. Put a GitHub PAT in `GITHUB_TOKEN` only for the JSON database / private code.
+
+## 6. Paper citation / warrant website
+
+`/citation`, `/warrant`, and `/serve-warrant` send the officer a **Open paper form** link. They fill a PDF-style page in the browser. Submit saves the record and posts the filled PDF into the Discord citations/warrants channel.
+
+WispByte must allocate an **HTTP port** the public can reach:
+
+| Variable | Notes |
+|----------|--------|
+| `SERVER_PORT` or `FORM_PORT` | Port the bot binds (default `8080`) |
+| `PUBLIC_FORM_URL` | Full URL officers open, e.g. `http://YOUR_ALLOCATION_IP:PORT` |
+| `SERVER_IP` | Used only if `PUBLIC_FORM_URL` is empty |
+
+Without `PUBLIC_FORM_URL` (or `SERVER_IP`), officers still fill the forms inside Discord.
+
+Check `GET /health` on that URL after start. Discord Link buttons cannot use `localhost` unless the officer is on the same machine.
 
 ## Why not `git clone`
 

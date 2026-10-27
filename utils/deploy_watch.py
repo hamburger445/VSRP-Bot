@@ -22,11 +22,11 @@ def _branch() -> str:
 
 
 def _poll_seconds() -> int:
-    raw = os.getenv("DEPLOY_POLL_SECONDS", "60")
+    raw = os.getenv("DEPLOY_POLL_SECONDS", "20")
     try:
-        return max(15, int(raw))
+        return max(10, int(raw))
     except ValueError:
-        return 60
+        return 20
 
 
 def watch_enabled() -> bool:
@@ -34,6 +34,9 @@ def watch_enabled() -> bool:
     if flag in {"0", "false", "no", "off"}:
         return False
     if flag in {"1", "true", "yes", "on"}:
+        return True
+    # WispByte / Pterodactyl always live under /home/container
+    if Path("/home/container").is_dir():
         return True
     return DEPLOY_SHA_FILE.exists()
 
@@ -79,17 +82,16 @@ async def deploy_watch_loop() -> None:
     current = read_deployed_sha()
     interval = _poll_seconds()
     log.info("Deploy watch on (%ss) current=%s", interval, current[:12] or "(unknown)")
+    await asyncio.sleep(8)
     while True:
-        await asyncio.sleep(interval)
         try:
             head = await fetch_head_sha()
         except Exception:
             log.exception("Deploy watch: failed to read GitHub")
-            continue
-        if not head:
-            continue
-        if not current:
-            current = head
-            continue
-        if head != current:
-            request_restart(head)
+        else:
+            if head:
+                if not current:
+                    current = head
+                elif head != current:
+                    request_restart(head)
+        await asyncio.sleep(interval)

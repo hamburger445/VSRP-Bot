@@ -131,6 +131,51 @@ def served_warrant_pdf_bytes(
     return bytes(pdf.output())
 
 
+def citation_pdf_bytes(
+    form: dict[str, Any] | None,
+    *,
+    case_no: str,
+    fine: int = 0,
+    subject_label: str = "",
+    issuer_label: str = "",
+) -> bytes:
+    data = dict(form or {})
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=18)
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.set_x(pdf.l_margin)
+    pdf.cell(pdf.epw, 10, "VIRGINIA UNIFORM SUMMONS", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.multi_cell(pdf.epw, 4, "Roleplay record. Not an official Commonwealth document.")
+    pdf.ln(2)
+    _heading(pdf, "Agency")
+    _line(pdf, "Agency:", data.get("agency"))
+    _heading(pdf, "Court and jurisdiction")
+    _line(pdf, "YOU ARE SUMMONED TO APPEAR IN THE COUNTY OF:", data.get("county") or "WYTHE")
+    _line(pdf, "Court type:", data.get("court_type"))
+    _heading(pdf, "Court appearance")
+    _line(pdf, "ON:", data.get("court_date") or f"{data.get('court_month', '')} {data.get('court_day', '')}, {data.get('court_year', '')}")
+    _line(pdf, "AT:", f"{data.get('court_time', '')} {data.get('am_pm', '')}")
+    _heading(pdf, "Charge information")
+    _line(pdf, "VA CODE:", data.get("va_code"))
+    _line(pdf, "LOCAL CODE:", data.get("local_code"))
+    _line(pdf, "DESCRIBE CHARGE:", data.get("charge_description") or data.get("describe_charge"))
+    _line(pdf, "FINE:", f"${int(fine):,}")
+    _heading(pdf, "Additional questions")
+    _line(pdf, "COMMERCIAL MOTOR VEHICLE:", data.get("commercial_motor_vehicle"))
+    _line(pdf, "HAZARDOUS MATERIALS:", data.get("hazardous_materials"))
+    _line(pdf, "RESULTED IN FATALITY:", data.get("resulted_in_fatality"))
+    _line(pdf, "HIGHWAY SAFETY CORRIDOR:", data.get("highway_safety_corridor"))
+    _heading(pdf, "Issuing officer")
+    _line(pdf, "ISSUED BY:", data.get("issued_by") or issuer_label)
+    _line(pdf, "CASE NO.:", format_case_number(case_no))
+    if subject_label:
+        _line(pdf, "DISCORD SUBJECT:", subject_label)
+    _disclaimer(pdf)
+    return bytes(pdf.output())
+
+
 def pdf_file(data: bytes, filename: str):
     import discord
 

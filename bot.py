@@ -35,6 +35,7 @@ COGS = [
     "cogs.sessions",
     "cogs.profiles",
     "cogs.leo",
+    "cogs.webforms",
     "cogs.admin",
     "cogs.economy",
     "cogs.blackjack",
@@ -60,6 +61,7 @@ MAIN_ONLY_MODULES = frozenset({
     "cogs.sessions",
     "cogs.profiles",
     "cogs.leo",
+    "cogs.webforms",
     "cogs.admin",
     "cogs.economy",
     "cogs.blackjack",
@@ -119,6 +121,10 @@ class VSRPBot(commands.Bot):
                         await interaction.response.send_message(msg, ephemeral=True)
                 except discord.HTTPException:
                     pass
+                return
+            original = getattr(error, "original", None)
+            if isinstance(original, discord.NotFound):
+                log.warning("Slash command expired before reply (Discord 10062)")
                 return
             log.exception("Slash command error", exc_info=error)
 

@@ -142,6 +142,8 @@ _require_discord_token() {
 
 export GITHUB_REPO="$R"
 export GITHUB_BRANCH="$B"
+export DEPLOY_WATCH="${DEPLOY_WATCH:-1}"
+export DEPLOY_POLL_SECONDS="${DEPLOY_POLL_SECONDS:-20}"
 
 while true; do
   T="$(mktemp -d)"

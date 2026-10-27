@@ -85,29 +85,35 @@ class Database:
         self._pool = pool
 
     async def _execute_with_retry(self, runner):
+        from utils.github_db import github_enabled
+
         last_exc: Exception | None = None
+        using_github = github_enabled()
         for attempt in range(2):
             try:
-                timeout = _query_timeout()
+                timeout = None if using_github else _query_timeout()
                 coro = runner(self._pool)
                 if timeout:
                     return await asyncio.wait_for(coro, timeout=timeout)
                 return await coro
             except _TRANSIENT_DB_ERRORS as exc:
                 last_exc = exc
+                if using_github:
+                    log.warning("GitHub database request failed: %s", exc or type(exc).__name__)
+                    raise DatabaseError(str(exc) or type(exc).__name__) from exc
                 if attempt == 0:
                     db = await _reconnect_pool()
                     self._pool = db._pool
                     continue
-                log.warning("Database unavailable after retry: %s", exc)
-                raise DatabaseError(str(exc)) from exc
+                log.warning("Database unavailable after retry: %s", exc or type(exc).__name__)
+                raise DatabaseError(str(exc) or type(exc).__name__) from exc
             except asyncio.TimeoutError as exc:
                 raise DatabaseTimeoutError(f"Query exceeded {_query_timeout()}s") from exc
             except asyncpg.PostgresError as exc:
                 log.exception("PostgreSQL error")
                 raise DatabaseError(str(exc)) from exc
         if last_exc:
-            raise DatabaseError(str(last_exc)) from last_exc
+            raise DatabaseError(str(last_exc) or type(last_exc).__name__) from last_exc
         raise DatabaseError("Database query failed")
 
     async def execute_fetchone(self, query: str, params: tuple = ()) -> dict | None:
@@ -233,8 +239,9 @@ class GithubPool:
             yield conn
 
     async def close(self) -> None:
-        from utils.github_db import persist
+        from utils.github_db import cancel_flush, persist
 
+        await cancel_flush()
         await persist()
 
 
@@ -247,9 +254,12 @@ async def get_db() -> Database:
             from utils.github_db import github_enabled
 
             if github_enabled():
+                from utils.github_db import warm
+
                 _pool = GithubPool()
                 _db = Database(_pool)
                 _schema_initialized = True
+                await warm()
                 log.info("GitHub JSON database ready")
             else:
                 _pool, _db = await _create_pool(initialize_schema=True)

@@ -60,9 +60,9 @@ Roleplay sessions (main, staff)
 Law enforcement (LEO)
 ---------------------
 - /leo-panel — panel for LEO actions.
-- /citation — Virginia Uniform Summons (dropdowns + multi-step form, case #, permanent record).
-- /warrant — warrant of arrest/search form (VA code, accused info, courts, case #). Posts a filled PDF.
-- /serve-warrant — mark warrant served (🟢 on record; no longer active). Posts a served-warrant PDF.
+- /citation — opens a paper Uniform Summons website; submit posts the filled PDF to Discord.
+- /warrant — opens a paper warrant website; submit posts the filled PDF to Discord.
+- /serve-warrant — opens a served-warrant website (🟢 on record; no longer active). Posts a served-warrant PDF.
 - /removewarrant — administratively clear active warrant (⚪ on record).
 - /warrant-check — full warrant history with 🔴 active / 🟢 served / ⚪ cleared.
 - /pager send — page a department.

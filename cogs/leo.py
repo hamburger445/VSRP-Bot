@@ -1,5 +1,3 @@
-import json
-
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -11,27 +9,35 @@ from cogs.leo_forms_ui import (
 )
 from utils.core import defer, format_datetime, load_config, reply
 from utils.database import DatabaseError, DatabaseTimeoutError, get_db
-from utils.helpers import (
-    department_display_name,
-    log_action,
-    notify_citation_issued,
-    notify_warrant_cleared,
-    notify_warrant_issued,
-)
-from utils.leo_case import allocate_case_number, format_case_number
-from utils.leo_forms import (
-    build_citation_embed,
-    build_served_warrant_embed,
-    build_warrant_embed,
-    citation_summary,
-    parse_form_json,
-    ticket_status_emoji,
-    warrant_form_to_reason,
-    warrant_status_emoji,
-)
-from utils.leo_pdf import pdf_file, served_warrant_pdf_bytes, warrant_pdf_bytes
+from utils.helpers import department_display_name, log_action, notify_warrant_cleared
+from utils.leo_case import format_case_number
+from utils.leo_forms import ticket_status_emoji, warrant_status_emoji
+from utils.form_tokens import sign_form_token
+from utils.form_urls import public_form_base
+from utils.leo_pdf import pdf_file
+from utils.leo_submit import submit_citation, submit_serve_warrant, submit_warrant
 from utils.permissions import is_leo
-from utils.tickets import enforce_ticket_thresholds
+
+
+def _paper_form_url(kind: str, interaction: discord.Interaction, member: discord.Member) -> str | None:
+    base = public_form_base()
+    if not base or not interaction.guild_id:
+        return None
+    if not getattr(interaction.client, "form_server_running", False):
+        return None
+    token = sign_form_token(
+        kind=kind,
+        guild_id=interaction.guild_id,
+        officer_id=interaction.user.id,
+        subject_id=member.id,
+    )
+    return f"{base}/f/{kind}?token={token}"
+
+
+class PaperFormView(discord.ui.View):
+    def __init__(self, url: str):
+        super().__init__(timeout=600)
+        self.add_item(discord.ui.Button(style=discord.ButtonStyle.link, label="Open paper form", url=url))
 
 
 def _dept_roles(guild: discord.Guild, department: str) -> list[discord.Role]:
@@ -98,60 +104,22 @@ class LawEnforcement(commands.Cog):
     ) -> None:
         if not interaction.response.is_done():
             await defer(interaction, ephemeral=True)
-
-        violation = citation_summary(form_data)
-
         try:
-            from utils.leo_records import create_citation
-
-            row = await create_citation(
-                subject_id=member.id,
-                issued_by=interaction.user.id,
+            result = await submit_citation(
+                self.bot,
+                guild=interaction.guild,
+                officer=interaction.user,
+                subject=member,
                 form_data=form_data,
                 fine=fine,
-                violation=violation,
             )
-            ticket_id = row.get("id") or 0
-            case_no = row.get("case_number") or await allocate_case_number()
         except (DatabaseTimeoutError, DatabaseError):
             await reply(interaction, "Database error. Please try again.", ephemeral=True)
             return
-
-        footer = f"Issued by {interaction.user.display_name} · Ticket #{ticket_id}"
-        embed = build_citation_embed(
-            form_data,
-            case_no=case_no,
-            subject=member,
-            fine=fine,
-            footer=footer,
-        )
-
-        await notify_citation_issued(
-            self.bot,
-            member.id,
-            ticket_id=ticket_id,
-            violation=violation,
-            fine=fine,
-            issued_by=interaction.user.display_name,
-            guild=interaction.guild,
-        )
-        await enforce_ticket_thresholds(self.bot, interaction.guild, member.id)
-        await log_action(
-            self.bot,
-            "citation_ticket",
-            interaction.user.id,
-            target_id=member.id,
-            details={"case_number": case_no, "violation": violation, "fine": fine},
-            channel_key="tickets",
-        )
-        channel_id = load_config().get("channels", {}).get("citations")
-        if channel_id and interaction.guild:
-            ch = interaction.guild.get_channel(channel_id)
-            if ch:
-                await ch.send(embed=embed)
         await interaction.followup.send(
-            f"{ticket_status_emoji('unpaid')} Citation **#{format_case_number(case_no)}** issued to {member.mention}.",
+            f"{ticket_status_emoji('unpaid')} Citation **#{result['case_number']}** issued to {member.mention}.",
             ephemeral=True,
+            file=pdf_file(result["pdf"], result["filename"]),
         )
 
     async def _finalize_warrant(
@@ -162,65 +130,21 @@ class LawEnforcement(commands.Cog):
     ) -> None:
         if not interaction.response.is_done():
             await defer(interaction, ephemeral=True)
-
-        reason = warrant_form_to_reason(form_data)
-        form_data.setdefault("county", "WYTHE")
-        form_data.setdefault("issued_by", interaction.user.display_name)
-
         try:
-            from utils.leo_records import create_warrant
-
-            row = await create_warrant(
-                subject_id=member.id,
-                issued_by=interaction.user.id,
+            result = await submit_warrant(
+                self.bot,
+                guild=interaction.guild,
+                officer=interaction.user,
+                subject=member,
                 form_data=form_data,
-                reason=reason,
             )
-            warrant_id = row.get("id") or 0
-            case_no = row.get("case_number") or await allocate_case_number()
         except (DatabaseTimeoutError, DatabaseError):
             await reply(interaction, "Database error. Please try again.", ephemeral=True)
             return
-
-        footer = f"Issued by {interaction.user.display_name} · Warrant #{warrant_id}"
-        embed = build_warrant_embed(
-            form_data,
-            case_no=case_no,
-            subject=member,
-            footer=footer,
-        )
-
-        await notify_warrant_issued(
-            self.bot,
-            member.id,
-            reason=reason,
-            issued_by=interaction.user.display_name,
-            guild=interaction.guild,
-        )
-        await log_action(
-            self.bot,
-            "warrant",
-            interaction.user.id,
-            target_id=member.id,
-            details={"case_number": case_no, "reason": reason},
-        )
-        pdf = warrant_pdf_bytes(
-            form_data,
-            case_no=case_no,
-            subject_label=str(member),
-            issuer_label=interaction.user.display_name,
-            reason=reason,
-        )
-        filename = f"warrant-{format_case_number(case_no)}.pdf"
-        channel_id = load_config().get("channels", {}).get("warrants")
-        if channel_id and interaction.guild:
-            ch = interaction.guild.get_channel(channel_id)
-            if ch:
-                await ch.send(embed=embed, file=pdf_file(pdf, filename))
         await interaction.followup.send(
-            f"{warrant_status_emoji(1, 'active')} Warrant **#{format_case_number(case_no)}** created for {member.mention}.",
+            f"{warrant_status_emoji(1, 'active')} Warrant **#{result['case_number']}** created for {member.mention}.",
             ephemeral=True,
-            file=pdf_file(pdf, filename),
+            file=pdf_file(result["pdf"], result["filename"]),
         )
 
     async def _finalize_serve_warrant(
@@ -231,57 +155,24 @@ class LawEnforcement(commands.Cog):
         serve_data: dict,
     ) -> None:
         await defer(interaction, ephemeral=True)
-        form_data = parse_form_json(warrant_row.get("form_json"))
-        case_no = warrant_row.get("case_number") or str(warrant_id)
-        serve_json = json.dumps(serve_data)
-
         try:
-            db = await get_db()
-            result = await db.execute(
-                """
-                UPDATE warrants
-                SET active = 0, status = 'served', cleared_at = NOW(),
-                    served_at = NOW(), served_by = ?, serve_form_json = ?
-                WHERE id = ? AND active = 1
-                """,
-                (interaction.user.id, serve_json, warrant_id),
+            result = await submit_serve_warrant(
+                self.bot,
+                guild=interaction.guild,
+                officer=interaction.user,
+                warrant_id=warrant_id,
+                serve_data=serve_data,
             )
-            await db.commit()
+        except ValueError as exc:
+            await reply(interaction, str(exc), ephemeral=True)
+            return
         except (DatabaseTimeoutError, DatabaseError):
             await reply(interaction, "Database error. Please try again.", ephemeral=True)
             return
-        if result.rowcount == 0:
-            await reply(interaction, "That warrant is no longer active.", ephemeral=True)
-            return
-
-        user_id = warrant_row["user_id"]
-        member = interaction.guild.get_member(user_id) if interaction.guild else None
-        embed = build_served_warrant_embed(form_data, serve_data, case_no=case_no, subject=member)
-        pdf = served_warrant_pdf_bytes(
-            form_data,
-            serve_data,
-            case_no=case_no,
-            subject_label=str(member) if member else str(user_id),
-        )
-        filename = f"served-warrant-{format_case_number(case_no)}.pdf"
-
-        channel_id = load_config().get("channels", {}).get("warrants")
-        if channel_id and interaction.guild:
-            ch = interaction.guild.get_channel(channel_id)
-            if ch:
-                await ch.send(embed=embed, file=pdf_file(pdf, filename))
-
-        await log_action(
-            self.bot,
-            "warrant_served",
-            interaction.user.id,
-            target_id=user_id,
-            details={"warrant_id": warrant_id, "case_number": case_no},
-        )
         await interaction.followup.send(
-            f"{warrant_status_emoji(0, 'served')} Warrant **#{format_case_number(case_no)}** marked **served** (record kept on file).",
+            f"{warrant_status_emoji(0, 'served')} Warrant **#{result['case_number']}** marked **served** (record kept on file).",
             ephemeral=True,
-            file=pdf_file(pdf, filename),
+            file=pdf_file(result["pdf"], result["filename"]),
         )
 
     @app_commands.command(name="citation", description="Issue a Virginia Uniform Summons (full form)")
@@ -290,10 +181,23 @@ class LawEnforcement(commands.Cog):
         if not is_leo(interaction.user):
             await reply(interaction, "Law enforcement or staff only.", ephemeral=True)
             return
+        if not await defer(interaction, ephemeral=True):
+            return
+        url = _paper_form_url("citation", interaction, member)
+        if url:
+            await reply(
+                interaction,
+                f"**Virginia Uniform Summons** for {member.mention}\n"
+                "Open the paper form, fill it in, and submit. It posts to Discord with a PDF.",
+                view=PaperFormView(url),
+                ephemeral=True,
+            )
+            return
         view = CitationOptionsView(self, member)
-        await interaction.response.send_message(
+        await reply(
+            interaction,
             f"**Virginia Uniform Summons** for {member.mention}\n"
-            "Use the dropdowns, then **Continue** to fill in court date, codes, and fine.",
+            "Set `PUBLIC_FORM_URL` on the host to use the website. Filling in Discord for now.",
             view=view,
             ephemeral=True,
         )
@@ -304,11 +208,24 @@ class LawEnforcement(commands.Cog):
         if not is_leo(interaction.user):
             await reply(interaction, "Law enforcement or staff only.", ephemeral=True)
             return
+        if not await defer(interaction, ephemeral=True):
+            return
+        url = _paper_form_url("warrant", interaction, member)
+        if url:
+            await reply(
+                interaction,
+                f"**Warrant** for {member.mention}\n"
+                "Open the paper form, fill it in, and submit. Discord gets the PDF.",
+                view=PaperFormView(url),
+                ephemeral=True,
+            )
+            return
         view = WarrantOptionsView(self, member)
         view._author_id = interaction.user.id
-        await interaction.response.send_message(
+        await reply(
+            interaction,
             f"**Warrant form** for {member.mention}\n"
-            "Select options below, then **Continue to details**.",
+            "Set `PUBLIC_FORM_URL` on the host to use the website. Filling in Discord for now.",
             view=view,
             ephemeral=True,
         )
@@ -318,6 +235,8 @@ class LawEnforcement(commands.Cog):
     async def serve_warrant(self, interaction: discord.Interaction, member: discord.Member):
         if not is_leo(interaction.user):
             await reply(interaction, "Law enforcement or staff only.", ephemeral=True)
+            return
+        if not await defer(interaction, ephemeral=True):
             return
         try:
             db = await get_db()
@@ -334,8 +253,18 @@ class LawEnforcement(commands.Cog):
         if not rows:
             await reply(interaction, f"No active warrants for {member.mention}.", ephemeral=True)
             return
+        url = _paper_form_url("serve", interaction, member)
+        if url:
+            await reply(
+                interaction,
+                f"Record **served warrant** for {member.mention} on the paper form.",
+                view=PaperFormView(url),
+                ephemeral=True,
+            )
+            return
         view = ServeWarrantView(self, rows)
-        await interaction.response.send_message(
+        await reply(
+            interaction,
             f"Select a warrant to mark **served** for {member.mention}:",
             view=view,
             ephemeral=True,
@@ -472,9 +401,9 @@ class LawEnforcement(commands.Cog):
             title="Law Enforcement Panel",
             description=(
                 "**Commands:**\n"
-                "`/citation` — Virginia Uniform Summons (dropdowns + forms)\n"
-                "`/warrant` — Warrant of arrest/search (dropdowns + forms)\n"
-                "`/serve-warrant` — Mark warrant served (keeps permanent record)\n"
+                "`/citation` — paper Uniform Summons website (posts PDF to Discord)\n"
+                "`/warrant` — paper warrant website (posts PDF to Discord)\n"
+                "`/serve-warrant` — paper served-warrant website\n"
                 "`/warrant-check` — View warrant history with status\n"
                 "`/removewarrant` — Administratively clear active warrant\n"
                 "`/pager send` — Page a department\n"

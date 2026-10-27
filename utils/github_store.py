@@ -12,6 +12,9 @@ import aiohttp
 from utils.core import get_github_repo, get_github_token
 
 log = logging.getLogger("vsrp_bot.github")
+_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=45, connect=15)
+_known_branches: set[str] = set()
+_file_sha: dict[tuple[str, str], str] = {}
 
 
 def _enabled() -> bool:
@@ -42,12 +45,15 @@ async def ensure_github_branch(branch: str) -> bool:
     token = get_github_token()
     if not token or not branch:
         return False
+    if branch in _known_branches:
+        return True
     repo = get_github_repo()
     headers = _headers(token)
     base = f"https://api.github.com/repos/{repo}/git/ref/heads"
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
         async with session.get(f"{base}/{branch}", headers=headers) as resp:
             if resp.status == 200:
+                _known_branches.add(branch)
                 return True
         source = get_github_repo_branch()
         async with session.get(f"{base}/{source}", headers=headers) as resp:
@@ -61,6 +67,7 @@ async def ensure_github_branch(branch: str) -> bool:
             json={"ref": f"refs/heads/{branch}", "sha": sha},
         ) as resp:
             if resp.status in (201, 422):
+                _known_branches.add(branch)
                 return True
             text = await resp.text()
             log.warning("GitHub create branch %s failed (%s): %s", branch, resp.status, text[:200])
@@ -74,7 +81,7 @@ async def github_get_json(relative_path: str, *, branch: str | None = None) -> d
 
     url = _api_url(relative_path, branch)
     headers = _headers(token)
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
         async with session.get(url, headers=headers) as resp:
             if resp.status == 404:
                 return None
@@ -83,6 +90,9 @@ async def github_get_json(relative_path: str, *, branch: str | None = None) -> d
                 log.warning("GitHub GET %s failed (%s): %s", relative_path, resp.status, body[:200])
                 return None
             payload = await resp.json()
+    sha = payload.get("sha")
+    if sha:
+        _file_sha[(relative_path, branch or get_github_repo_branch())] = sha
     try:
         raw = base64.b64decode(payload["content"]).decode("utf-8")
         return json.loads(raw)
@@ -112,12 +122,15 @@ async def github_put_json(
     headers = _headers(token)
 
     url = _api_url(relative_path, target_branch)
-    sha: str | None = None
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as resp:
-            if resp.status == 200:
-                existing = await resp.json()
-                sha = existing.get("sha")
+    sha = _file_sha.get((relative_path, target_branch))
+    async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
+        if not sha:
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    existing = await resp.json()
+                    sha = existing.get("sha")
+                    if sha:
+                        _file_sha[(relative_path, target_branch)] = sha
 
         body: dict[str, Any] = {
             "message": message,
@@ -130,9 +143,15 @@ async def github_put_json(
         put_url = _api_url(relative_path).split("?")[0]
         async with session.put(put_url, headers=headers, json=body) as resp:
             if resp.status in (200, 201):
+                payload = await resp.json()
+                new_sha = (payload.get("content") or {}).get("sha")
+                if new_sha:
+                    _file_sha[(relative_path, target_branch)] = new_sha
                 return True
             text = await resp.text()
             log.warning("GitHub PUT %s failed (%s): %s", relative_path, resp.status, text[:300])
+            if resp.status in (409, 422):
+                _file_sha.pop((relative_path, target_branch), None)
             return False
 
 

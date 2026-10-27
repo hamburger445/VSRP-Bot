@@ -361,10 +361,13 @@ async def reply(interaction: discord.Interaction, *args, ephemeral: bool = False
         kwargs["embed"] = embed
         args = ()
 
-    if interaction.response.is_done():
-        await interaction.followup.send(*args, **kwargs)
-    else:
-        await interaction.response.send_message(*args, **kwargs)
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(*args, **kwargs)
+        else:
+            await interaction.response.send_message(*args, **kwargs)
+    except discord.NotFound:
+        return
 
 
 async def run_db_command(interaction: discord.Interaction, coro, *, ephemeral: bool = True):

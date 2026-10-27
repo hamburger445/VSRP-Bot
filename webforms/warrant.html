@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Warrant of Arrest / Search</title>
+  <link rel="stylesheet" href="/static/forms.css">
+</head>
+<body>
+  <form class="page" method="post" action="/f/warrant">
+    <input type="hidden" name="token" value="{{TOKEN}}">
+    <h1>WARRANT OF (ARREST / SEARCH)</h1>
+    <p class="sub">Felony or Misdemeanor · State or County · Roleplay record, not an official court form.</p>
+    <p class="meta">Subject: {{SUBJECT}} · Officer: {{OFFICER}}</p>
+    {{ERROR}}
+    <div class="grid">
+      <label>Warrant type
+        <select name="warrant_type"><option>Arrest</option><option>Search</option></select>
+      </label>
+      <label>Offense classification
+        <select name="charge_class"><option>Misdemeanor</option><option>Felony</option></select>
+      </label>
+      <label>Warrant jurisdiction
+        <select name="jurisdiction"><option>County</option><option>State</option></select>
+      </label>
+      <label>County of <input name="county" value="WYTHE"></label>
+    </div>
+    <h2>Jurisdiction and court</h2>
+    <div class="checks">
+      <label><input type="checkbox" name="court_general_district"> General District Court</label>
+      <label><input type="checkbox" name="court_criminal"> Criminal</label>
+      <label><input type="checkbox" name="court_traffic"> Traffic</label>
+      <label><input type="checkbox" name="court_jdr"> Juvenile and Domestic Relations District Court</label>
+    </div>
+    <h2>Offense information</h2>
+    <div class="grid">
+      <label>Code of Virginia <input name="va_code" required></label>
+      <label class="span">Code description <textarea name="code_description" required></textarea></label>
+    </div>
+    <h2>Accused information</h2>
+    <div class="grid">
+      <label class="span">Accused: Last, First, Middle Name <input name="accused" required></label>
+      <label>Sex <select name="sex"><option>M</option><option>F</option><option>Unspecified</option></select></label>
+      <label>Race
+        <select name="race">
+          <option value="">Select</option>
+          <option>Black</option><option>White</option><option>Hispanic</option>
+          <option>Asian</option><option>Native American</option><option>Other</option>
+        </select>
+      </label>
+      <label>Eyes <input name="eyes"></label>
+      <label>Hair <input name="hair"></label>
+      <label>Date &amp; time issued <input name="issued_datetime" value="{{ISSUED_AT}}"></label>
+    </div>
+    <p class="sub">Case number is assigned when you submit (0000+).</p>
+    <button type="submit">Issue warrant to Discord</button>
+  </form>
+</body>
+</html>

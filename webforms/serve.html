@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Served Warrant</title>
+  <link rel="stylesheet" href="/static/forms.css">
+</head>
+<body>
+  <form class="page" method="post" action="/f/serve">
+    <input type="hidden" name="token" value="{{TOKEN}}">
+    <h1>SERVED WARRANT</h1>
+    <p class="sub">Roleplay record. Original issue date is not changed.</p>
+    <p class="meta">Subject: {{SUBJECT}} · Officer: {{OFFICER}}</p>
+    {{ERROR}}
+    <h2>Select warrant</h2>
+    <label>Existing warrant
+      <select name="warrant_id" required>{{WARRANT_OPTIONS}}</select>
+    </label>
+    <h2>Service information</h2>
+    <div class="grid">
+      <label class="span">Arresting officer <input name="arresting_officer" value="{{OFFICER}}" required></label>
+      <label class="span">Badge no., agency, &amp; jurisdiction <input name="badge_agency_jurisdiction" value="{{BADGE}}" required></label>
+      <label>Date &amp; time served <input name="served_datetime" value="{{SERVED_AT}}" required></label>
+    </div>
+    <button type="submit">Record service in Discord</button>
+  </form>
+</body>
+</html>
