@@ -91,9 +91,11 @@ WispByte must allocate an **HTTP port** the public can reach:
 | `PUBLIC_FORM_URL` | Full URL officers open, e.g. `http://YOUR_ALLOCATION_IP:PORT` |
 | `SERVER_IP` | Used only if `PUBLIC_FORM_URL` is empty |
 
-Without `PUBLIC_FORM_URL` (or `SERVER_IP`), officers still fill the forms inside Discord.
+`localhost` / `127.0.0.1` is ignored — Discord cannot open your panel machine. Use the node’s **public IP** plus the allocated port.
 
-Check `GET /health` on that URL after start. Discord Link buttons cannot use `localhost` unless the officer is on the same machine.
+Discord’s built-in window often fails on HTTP game-host ports. Officers should tap **Open in browser** (Chrome/Safari) or **Fill out in Discord**. Opening only `http://IP:PORT/` shows a status page; the real form is `/f/citation/...` from the command.
+
+Check `GET /health` on that URL after start.
 
 ## Why not `git clone`
 

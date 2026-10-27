@@ -13,15 +13,14 @@ from utils.helpers import department_display_name, log_action, notify_warrant_cl
 from utils.leo_case import format_case_number
 from utils.leo_forms import ticket_status_emoji, warrant_status_emoji
 from utils.form_tokens import sign_form_token
-from utils.form_urls import public_form_base
+from utils.form_urls import form_page_url
 from utils.leo_pdf import pdf_file
 from utils.leo_submit import submit_citation, submit_serve_warrant, submit_warrant
 from utils.permissions import is_leo
 
 
 def _paper_form_url(kind: str, interaction: discord.Interaction, member: discord.Member) -> str | None:
-    base = public_form_base()
-    if not base or not interaction.guild_id:
+    if not interaction.guild_id:
         return None
     if not getattr(interaction.client, "form_server_running", False):
         return None
@@ -31,13 +30,43 @@ def _paper_form_url(kind: str, interaction: discord.Interaction, member: discord
         officer_id=interaction.user.id,
         subject_id=member.id,
     )
-    return f"{base}/f/{kind}?token={token}"
+    return form_page_url(kind, token)
 
 
 class PaperFormView(discord.ui.View):
-    def __init__(self, url: str):
+    def __init__(self, url: str, *, cog: "LawEnforcement", member: discord.Member, kind: str, rows=None):
         super().__init__(timeout=600)
-        self.add_item(discord.ui.Button(style=discord.ButtonStyle.link, label="Open paper form", url=url))
+        self.cog = cog
+        self.member = member
+        self.kind = kind
+        self.rows = rows
+        self.add_item(discord.ui.Button(style=discord.ButtonStyle.link, label="Open in browser", url=url))
+
+    @discord.ui.button(label="Fill out in Discord", style=discord.ButtonStyle.primary)
+    async def fill_discord(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.kind == "citation":
+            view = CitationOptionsView(self.cog, self.member)
+            await interaction.response.send_message(
+                f"**Virginia Uniform Summons** for {self.member.mention}",
+                view=view,
+                ephemeral=True,
+            )
+            return
+        if self.kind == "warrant":
+            view = WarrantOptionsView(self.cog, self.member)
+            view._author_id = interaction.user.id
+            await interaction.response.send_message(
+                f"**Warrant form** for {self.member.mention}",
+                view=view,
+                ephemeral=True,
+            )
+            return
+        view = ServeWarrantView(self.cog, self.rows or [])
+        await interaction.response.send_message(
+            f"Select a warrant to mark **served** for {self.member.mention}:",
+            view=view,
+            ephemeral=True,
+        )
 
 
 def _dept_roles(guild: discord.Guild, department: str) -> list[discord.Role]:
@@ -188,8 +217,10 @@ class LawEnforcement(commands.Cog):
             await reply(
                 interaction,
                 f"**Virginia Uniform Summons** for {member.mention}\n"
-                "Open the paper form, fill it in, and submit. It posts to Discord with a PDF.",
-                view=PaperFormView(url),
+                "Use **Open in browser** (Chrome/Safari — Discord’s built-in window often fails on HTTP).\n"
+                "Or **Fill out in Discord**.\n"
+                f"{url}",
+                view=PaperFormView(url, cog=self, member=member, kind="citation"),
                 ephemeral=True,
             )
             return
@@ -215,8 +246,10 @@ class LawEnforcement(commands.Cog):
             await reply(
                 interaction,
                 f"**Warrant** for {member.mention}\n"
-                "Open the paper form, fill it in, and submit. Discord gets the PDF.",
-                view=PaperFormView(url),
+                "Use **Open in browser** (Chrome/Safari — Discord’s built-in window often fails on HTTP).\n"
+                "Or **Fill out in Discord**.\n"
+                f"{url}",
+                view=PaperFormView(url, cog=self, member=member, kind="warrant"),
                 ephemeral=True,
             )
             return
@@ -257,8 +290,10 @@ class LawEnforcement(commands.Cog):
         if url:
             await reply(
                 interaction,
-                f"Record **served warrant** for {member.mention} on the paper form.",
-                view=PaperFormView(url),
+                f"Record **served warrant** for {member.mention}.\n"
+                "Use **Open in browser** or **Fill out in Discord**.\n"
+                f"{url}",
+                view=PaperFormView(url, cog=self, member=member, kind="serve", rows=rows),
                 ephemeral=True,
             )
             return

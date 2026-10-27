@@ -27,8 +27,15 @@ def test_form_token_rejects_tamper(monkeypatch):
 
 
 def test_public_form_base(monkeypatch):
+    monkeypatch.delenv("SERVER_IP", raising=False)
+    monkeypatch.delenv("CONNECT_IP", raising=False)
     monkeypatch.setenv("PUBLIC_FORM_URL", "http://example.test:8080/")
     assert public_form_base() == "http://example.test:8080"
+
+
+def test_public_form_base_rejects_localhost(monkeypatch):
+    monkeypatch.setenv("PUBLIC_FORM_URL", "http://127.0.0.1:8080")
+    assert public_form_base() == ""
 
 
 def test_citation_pdf():

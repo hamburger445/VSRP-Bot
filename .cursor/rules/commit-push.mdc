@@ -1,0 +1,8 @@
+---
+description: Always commit and push completed work to GitHub
+alwaysApply: true
+---
+
+# Commit and push
+
+After finishing implementation or a fix, commit all relevant project files (never `.env` or secrets) and `git push` to `origin` on the current branch. Do not wait to be asked. Use the existing commit author if git has no identity set (`git -c user.name=... -c user.email=...`). Prefer a short why-focused commit message.

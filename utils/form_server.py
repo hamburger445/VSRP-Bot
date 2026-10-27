@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import logging
 from pathlib import Path
+from urllib.parse import unquote
 
 from aiohttp import web
 
@@ -28,9 +29,14 @@ def _page(name: str) -> str:
 
 def _render(name: str, **parts: str) -> str:
     text = _page(name)
+    parts.setdefault("CSS", _page("forms.css"))
     for key, value in parts.items():
         text = text.replace("{{" + key + "}}", value)
     return text
+
+
+def _html(text: str, status: int = 200) -> web.Response:
+    return web.Response(text=text, content_type="text/html", charset="utf-8", status=status)
 
 
 def _err(msg: str) -> str:
@@ -40,18 +46,15 @@ def _err(msg: str) -> str:
 async def _context(request: web.Request, kind: str) -> tuple[dict, web.Response | None]:
     if request.method == "POST":
         post = await request.post()
-        token = str(post.get("token") or "")
+        token = str(post.get("token") or request.match_info.get("token") or "")
     else:
         post = None
-        token = str(request.query.get("token") or "")
+        token = str(request.match_info.get("token") or request.query.get("token") or "")
+    token = unquote(token)
     try:
         payload = parse_form_token(token)
     except ValueError as exc:
-        return {}, web.Response(
-            text=_render("error.html", MESSAGE=html.escape(str(exc))),
-            content_type="text/html",
-            status=400,
-        )
+        return {}, _html(_render("error.html", MESSAGE=html.escape(str(exc))), 400)
     if payload.get("t") != kind:
         return {}, web.Response(
             text=_render("error.html", MESSAGE="Wrong form type for this link."),
@@ -285,18 +288,37 @@ async def health(_request: web.Request):
     return web.json_response({"ok": True, "forms": True})
 
 
+async def home(_request: web.Request):
+    return _html(_render("home.html"))
+
+
+async def not_found(_request: web.Request):
+    return _html(
+        _render(
+            "error.html",
+            MESSAGE="This is not a form link. In Discord run /citation and open that URL in Chrome or Safari.",
+        ),
+        404,
+    )
+
+
 async def start_form_server(bot) -> web.AppRunner:
     global _bot
     _bot = bot
     app = web.Application()
+    app.router.add_get("/", home)
     app.router.add_get("/health", health)
     app.router.add_get("/static/forms.css", static_css)
+    app.router.add_get("/f/citation/{token}", get_citation)
     app.router.add_get("/f/citation", get_citation)
     app.router.add_post("/f/citation", post_citation)
+    app.router.add_get("/f/warrant/{token}", get_warrant)
     app.router.add_get("/f/warrant", get_warrant)
     app.router.add_post("/f/warrant", post_warrant)
+    app.router.add_get("/f/serve/{token}", get_serve)
     app.router.add_get("/f/serve", get_serve)
     app.router.add_post("/f/serve", post_serve)
+    app.router.add_route("*", "/{tail:.*}", not_found)
     runner = web.AppRunner(app)
     await runner.setup()
     host = form_bind_host()
