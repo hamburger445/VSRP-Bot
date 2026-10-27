@@ -116,7 +116,12 @@ def _clean_env(value: str) -> str:
 
 
 def get_token() -> str:
-    token = _clean_env(os.getenv("DISCORD_TOKEN", ""))
+    token = _clean_env(
+        os.getenv("DISCORD_TOKEN")
+        or os.getenv("BOT_TOKEN")
+        or os.getenv("TOKEN")
+        or ""
+    )
     if not token or token == "your_bot_token_here":
         raise ValueError(
             "DISCORD_TOKEN is missing. Upload a .env file to your host or set "

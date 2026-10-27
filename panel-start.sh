@@ -113,6 +113,33 @@ _sync() {
   _fetch_sha
 }
 
+_load_dotenv() {
+  if [[ ! -f /home/container/.env ]]; then
+    return 0
+  fi
+  echo "[Env] Loading /home/container/.env"
+  set -a
+  # shellcheck disable=SC1091
+  source /home/container/.env || true
+  set +a
+}
+
+_require_discord_token() {
+  if [[ -n "${DISCORD_TOKEN:-}" && "${DISCORD_TOKEN}" != "your_bot_token_here" ]]; then
+    return 0
+  fi
+  if [[ -n "${BOT_TOKEN:-}" ]]; then
+    export DISCORD_TOKEN="$BOT_TOKEN"
+    return 0
+  fi
+  echo "[Bot] ERROR: DISCORD_TOKEN is missing."
+  echo "  WispByte → your server → Startup / Variables → create DISCORD_TOKEN"
+  echo "  Paste the Discord bot token (Developer Portal → Bot → Reset Token)."
+  echo "  Or File Manager → New File named .env with a line: DISCORD_TOKEN=your_token"
+  echo "  Then click Start. Do not put the Discord token in GITHUB_TOKEN."
+  exit 1
+}
+
 export GITHUB_REPO="$R"
 export GITHUB_BRANCH="$B"
 
@@ -120,6 +147,8 @@ while true; do
   T="$(mktemp -d)"
   A="$T/a.tar.gz"
   _sync
+  _load_dotenv
+  _require_discord_token
   echo "[Bot] Starting (slash commands sync on startup; deploy watch polls GitHub)..."
   set +e
   "$PY" /home/container/bot.py

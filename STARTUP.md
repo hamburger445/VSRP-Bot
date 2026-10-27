@@ -27,7 +27,21 @@ Set these under **Variables**. The GitHub pull runs **before** Python reads `.en
 | `DEPLOY_POLL_SECONDS` | No | Default `60` |
 | `PYTHON` | No | Default `/usr/local/bin/python` |
 
-Upload **`config.yaml`** and **`.env`** once via SFTP. Restarts keep those two files. New keys from `config.example.yaml` are merged in; existing values are not overwritten.
+You must give the bot a Discord token **on the panel**. The GitHub download does not include `.env`.
+
+**Option A (easiest):** WispByte → server → **Startup** or **Variables** → add:
+
+- `DISCORD_TOKEN` = your bot token from Discord Developer Portal → Bot
+
+**Option B:** File Manager → New File `.env` in `/home/container` with:
+
+```
+DISCORD_TOKEN=paste_token_here
+GITHUB_TOKEN=your_github_pat
+BOT_DATABASE=github
+```
+
+Upload **`config.yaml`** the same way (or let the script copy `config.example.yaml` once, then edit IDs). Restarts keep `.env` and `config.yaml`.
 
 If `config.yaml` is missing, the script copies `config.example.yaml`.
 
@@ -50,6 +64,8 @@ If the repo is **private**, do not send a Bearer header unless `GITHUB_TOKEN` is
 3. Console shows `New GitHub commit … — exiting 42`.
 4. `panel-start.sh` is still running: it downloads the new tarball, runs `pip install`, and starts `bot.py` again.
 5. The WispByte server stays **online** through that reload.
+
+If the log says `DISCORD_TOKEN is missing`, the code pull succeeded. Add the token (section 2) and click **Start**. Wait 60 seconds if auto-restart aborted after a crash loop.
 
 A crash (any exit code other than 42) stops the server so you can read the log. Enable the panel **restart on crash** option if you also want those to come back by themselves.
 
