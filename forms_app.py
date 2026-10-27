@@ -51,9 +51,9 @@ def _token_payload(request: web.Request, body: dict | None = None) -> dict:
 async def home(_request: web.Request):
     base = public_form_base() or "(set PUBLIC_FORM_URL to https://your-service.onrender.com)"
     return _html(
-        "<!doctype html><meta charset=utf-8><title>VSRP forms</title>"
+        "<!doctype html><meta charset=utf-8><title>WCRP forms</title>"
         "<body style='font-family:Georgia;background:#1c1c1c;color:#eee;padding:40px'>"
-        "<h1>VSRP document editor</h1>"
+        "<h1>WCRP document editor</h1>"
         f"<p>This host is up. Open a form from Discord <code>/citation</code>."
         f" Public URL: {base}</p></body>"
     )

@@ -29,7 +29,7 @@ def _headers() -> dict[str, str] | None:
         token = get_token()
     except ValueError:
         return None
-    return {"Authorization": f"Bot {token}", "User-Agent": "VSRP-Forms"}
+    return {"Authorization": f"Bot {token}", "User-Agent": "WCRP-Forms"}
 
 
 async def discord_user(user_id: int) -> dict[str, Any]:

@@ -414,7 +414,7 @@ class Shop(commands.Cog):
 
         categories = [c["category"] for c in cats]
         embed = discord.Embed(
-            title="VSRP Shop",
+            title="WCRP Shop",
             description=(
                 "Select a category, then press **Buy** on the item you want.\n\n"
                 "**Registration:** licenses, insurance, renewals, and buy backs."

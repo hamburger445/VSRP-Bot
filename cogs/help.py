@@ -71,7 +71,7 @@ def _help_sections() -> dict[str, dict]:
             "description": "Police and LEO tools (main server only)",
             "visible": lambda m: is_main_guild(m.guild.id) and is_leo(m),
             "commands": [
-                ("/citation @user", "Opens HTTPS document editor; PDF posts to Discord for review"),
+                ("/citation @user", "Opens HTTPS editor; citation goes on their record automatically"),
                 ("/warrant @user", "Opens HTTPS warrant editor; PDF posts to Discord for review"),
                 ("/serve-warrant @user", "Opens served-warrant editor (permanent record)"),
                 ("/leo-form @user", "Document editor with type picker (citation / warrant / served)"),
@@ -222,7 +222,7 @@ class Help(commands.Cog):
         rank_parts = list(dict.fromkeys(rank_parts))
 
         embed = discord.Embed(
-            title="VSRP Bot Help",
+            title="WCRP Bot Help",
             description=(
                 f"Your access level: **{' + '.join(rank_parts)}**\n\n"
                 "Select a category below to view commands available to you."

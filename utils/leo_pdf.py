@@ -45,7 +45,7 @@ def _disclaimer(pdf: FPDF) -> None:
     pdf.multi_cell(
         pdf.epw,
         4,
-        "Roleplay record for VSRP. This document is not an official Commonwealth of Virginia court form.",
+        "Roleplay record for WCRP. This document is not an official Commonwealth of Virginia court form.",
     )
 
 
@@ -147,7 +147,7 @@ def citation_pdf_bytes(
     pdf.set_x(pdf.l_margin)
     pdf.cell(pdf.epw, 10, "VIRGINIA UNIFORM SUMMONS", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
     pdf.set_font("Helvetica", "I", 8)
-    pdf.multi_cell(pdf.epw, 4, "Roleplay record. Not an official Commonwealth document.")
+    pdf.multi_cell(pdf.epw, 4, "Roleplay record for WCRP. Not an official Commonwealth document.")
     pdf.ln(2)
     _heading(pdf, "Agency")
     _line(pdf, "Agency:", data.get("agency"))

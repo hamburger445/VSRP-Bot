@@ -121,7 +121,7 @@ BOT_DATABASE=github
 
 Use the real `*.onrender.com` hostname Render shows after the first deploy (https only — not an IP, not localhost).
 
-`/citation`, `/warrant`, `/serve-warrant`, and `/leo-form` send **Open document editor**. Submit saves a draft-capable record, posts the PDF to the citations/warrants channel, and adds Approve / Reject for LEO/staff.
+`/citation` posts the summons to their record immediately (no approve/reject). `/warrant` and `/serve-warrant` still post a PDF for LEO/staff to approve or reject.
 
 ## Why not `git clone`
 

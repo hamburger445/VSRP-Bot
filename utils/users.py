@@ -291,9 +291,9 @@ async def sync_member_roles(client: discord.Client, guild: discord.Guild, user_i
 
     try:
         if to_add:
-            await member.add_roles(*to_add, reason="VSRP registration sync")
+            await member.add_roles(*to_add, reason="WCRP registration sync")
         if to_remove:
-            await member.remove_roles(*to_remove, reason="VSRP registration sync")
+            await member.remove_roles(*to_remove, reason="WCRP registration sync")
     except discord.HTTPException:
         log.warning("Role sync failed for user %s", user_id)
 

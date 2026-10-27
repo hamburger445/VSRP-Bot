@@ -1,4 +1,4 @@
-# VSRP Discord Bot
+# WCRP Discord Bot
 
 Python Discord bot for urban roleplay servers. Uses a GitHub JSON database by default and interactive dashboards.
 

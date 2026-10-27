@@ -94,7 +94,7 @@ ACTIVITY_TYPES = {
 }
 
 
-class VSRPBot(commands.Bot):
+class WCRPBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -184,7 +184,7 @@ class VSRPBot(commands.Bot):
             await self._sync_commands(all_guild_ids())
 
         bot_cfg = self.config.get("bot", {})
-        activity_name = bot_cfg.get("activity_name", "VSRP Sessions")
+        activity_name = bot_cfg.get("activity_name", "WCRP Sessions")
         activity_type = ACTIVITY_TYPES.get(
             bot_cfg.get("activity_type", "watching"), discord.ActivityType.watching
         )
@@ -254,7 +254,7 @@ class VSRPBot(commands.Bot):
 
 async def main():
     materialize_config_from_example()
-    bot = VSRPBot()
+    bot = WCRPBot()
     async with bot:
         await bot.start(get_token())
 

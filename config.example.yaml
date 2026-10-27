@@ -177,7 +177,7 @@ support_tickets:
       description: "Ban or punishment appeal"
 
 rules:
-  title: "VSRP Server Rules"
+  title: "WCRP Server Rules"
   color: 15158332
   content: |
     Review the full server rules here:

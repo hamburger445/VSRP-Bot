@@ -144,25 +144,13 @@ async def submit_citation(
             details={"case_number": case_no, "violation": violation, "fine": fine},
             channel_key="tickets",
         )
-    from utils.form_store import create_review
-
-    review_id = await create_review(
-        kind="citation",
-        case_number=format_case_number(case_no),
-        officer_id=int(officer.id),
-        subject_id=int(subject.id),
-        guild_id=int(guild.id if guild else guild_id or 0),
-        jti=jti or f"cite-{ticket_id}",
-        record_id=ticket_id,
-    )
-    await _post_record(guild, officer, embed, pdf, filename, channel_key="citations", review_id=review_id, bot=bot)
+    await _post_record(guild, officer, embed, pdf, filename, channel_key="citations", review_id=0, bot=bot)
     return {
         "case_number": format_case_number(case_no),
         "ticket_id": ticket_id,
         "pdf": pdf,
         "filename": filename,
         "embed": embed,
-        "review_id": review_id,
     }
 
 
