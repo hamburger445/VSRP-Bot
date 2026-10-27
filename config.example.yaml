@@ -7,7 +7,7 @@ database:
 
 bot:
   prefix: "-"
-  activity_name: "VSRC Sessions"
+  activity_name: "WCRP Sessions"
   activity_type: "watching"
 
 guild:

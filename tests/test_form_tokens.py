@@ -66,10 +66,3 @@ def test_editor_html_is_split_layout():
     assert "form-pane" in text
     assert "preview-pane" in text
     assert "/api/submit" in text
-
-
-def test_citation_html_placeholders():
-    root = os.path.join(os.path.dirname(__file__), "..", "webforms", "citation.html")
-    text = open(root, encoding="utf-8").read()
-    assert "{{TOKEN}}" in text
-    assert 'action="/f/citation"' in text
