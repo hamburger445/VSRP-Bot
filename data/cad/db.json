@@ -1,7 +1,7 @@
 {
   "seq": {
     "SET": 14,
-    "bot_state": 14,
+    "bot_state": 16,
     "cad_audit": 12,
     "cad_dm_codes": 3,
     "cad_oauth_tokens": 1,
@@ -48,12 +48,12 @@
       {
         "id": 3,
         "key": "applications_panel:1513916429089509496",
-        "value": "1556788058525925447"
+        "value": "1564640126850703401"
       },
       {
         "id": 4,
         "key": "verification_panel:1250612127891197953",
-        "value": "1523001704466088108"
+        "value": "1564640127580639354"
       },
       {
         "id": 5,
