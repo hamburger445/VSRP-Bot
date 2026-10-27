@@ -375,7 +375,8 @@
         "kind": "citation",
         "officer_id": 1391201462259810354,
         "record_id": 1,
-        "status": "pending",
+        "reviewer_id": 1391201462259810354,
+        "status": "rejected",
         "subject_id": 1553828134288236626
       }
     ],
