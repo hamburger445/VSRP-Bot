@@ -1,12 +1,13 @@
 {
   "seq": {
     "SET": 14,
-    "bot_state": 60,
+    "bot_state": 56,
     "cad_audit": 12,
     "cad_dm_codes": 3,
     "cad_oauth_tokens": 1,
     "cad_outbox": 4,
     "cad_users": 1,
+    "form_drafts": 1,
     "shop_items": 5,
     "users": 8
   },
@@ -318,6 +319,17 @@
       }
     ],
     "citation_tickets": [],
+    "form_drafts": [
+      {
+        "guild_id": 1,
+        "id": 1,
+        "jti": "4eccb23f65854be89cc5d96b7c179c6b",
+        "kind": "citation",
+        "officer_id": 2,
+        "payload": "{\"agency\": \"Wytheville Police Department\", \"county\": \"WYTHE\", \"court_type\": \"General District Court (Traffic)\", \"court_month\": \"\", \"court_day\": \"\", \"court_year\": \"2026\", \"court_time\": \"\", \"am_pm\": \"AM\", \"va_code\": \"46.2-862\", \"local_code\": \"\", \"charge_description\": \"\", \"fine\": \"0\", \"commercial_motor_vehicle\": \"No\", \"hazardous_materials\": \"No\", \"resulted_in_fatality\": \"No\", \"highway_safety_corridor\": \"Yes\", \"issued_by\": \"Charlie Kirk\", \"kind\": \"citation\"}",
+        "subject_id": 3
+      }
+    ],
     "guild_settings": [],
     "mod_appeals": [],
     "mod_cases": [],
