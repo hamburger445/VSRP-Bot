@@ -29,8 +29,14 @@ _download_archive() {
   local branch="$3"
 
   if command -v curl >/dev/null 2>&1; then
+    echo "[GitHub] Downloading (public) ${repo} @ ${branch}..."
+    if curl -fSL --connect-timeout 20 --max-time "${SYNC_TIMEOUT}" \
+      -L "https://github.com/${repo}/archive/refs/heads/${branch}.tar.gz" \
+      -o "${dest}"; then
+      return 0
+    fi
     if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-      echo "[GitHub] Downloading (authenticated) ${repo} @ ${branch}..."
+      echo "[GitHub] Public archive failed — downloading with token..."
       curl -fSL --connect-timeout 20 --max-time "${SYNC_TIMEOUT}" \
         -H "Authorization: Bearer ${GITHUB_TOKEN}" \
         -H "Accept: application/vnd.github+json" \
@@ -39,11 +45,8 @@ _download_archive() {
         -o "${dest}"
       return 0
     fi
-    echo "[GitHub] Downloading (public) ${repo} @ ${branch}..."
-    curl -fSL --connect-timeout 20 --max-time "${SYNC_TIMEOUT}" \
-      -L "https://github.com/${repo}/archive/refs/heads/${branch}.tar.gz" \
-      -o "${dest}"
-    return 0
+    echo "[GitHub] Public download failed and GITHUB_TOKEN is empty (do not send an empty Bearer header)."
+    return 1
   fi
 
   if command -v wget >/dev/null 2>&1; then

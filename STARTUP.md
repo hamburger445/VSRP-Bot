@@ -33,25 +33,15 @@ If `config.yaml` is missing, the script copies `config.example.yaml`.
 
 ## 3. Startup command
 
-**Startup** field (use this after the first successful boot):
-
-```bash
-cd /home/container && bash panel-start.sh
-```
-
-**First boot only** — the disk is empty, so `panel-start.sh` is not there yet. Paste this, start once, then switch Startup back to the line above.
-
-Private repo:
-
-```bash
-cd /home/container && curl -fSL --connect-timeout 20 --max-time 300 -H "Authorization: Bearer ${GITHUB_TOKEN}" -L "https://api.github.com/repos/hamburger445/VSRP-Bot/tarball/main" -o /tmp/v.tar.gz && tar -xzf /tmp/v.tar.gz -C /tmp && cp -a "$(find /tmp -mindepth 1 -maxdepth 1 -type d | head -1)"/panel-start.sh . && bash panel-start.sh
-```
-
-Public repo:
+Use this as the **Startup** command on every boot (including the first). It downloads from the **public** GitHub archive (no token header). That avoids GitHub **401**, which happens if you send `Authorization: Bearer` with an empty or invalid `GITHUB_TOKEN`.
 
 ```bash
 cd /home/container && curl -fSL --connect-timeout 20 --max-time 300 -L "https://github.com/hamburger445/VSRP-Bot/archive/refs/heads/main.tar.gz" -o /tmp/v.tar.gz && tar -xzf /tmp/v.tar.gz -C /tmp && cp -a "$(find /tmp -mindepth 1 -maxdepth 1 -type d | head -1)"/panel-start.sh . && bash panel-start.sh
 ```
+
+After the first successful start you *may* shorten it to `cd /home/container && bash panel-start.sh`. The longer command is fine to leave forever.
+
+If the repo is **private**, do not send a Bearer header unless `GITHUB_TOKEN` is a real GitHub PAT in **panel Variables**. Empty `Bearer ` is always 401.
 
 ## 4. How a deploy works
 
@@ -67,9 +57,11 @@ Local `python bot.py` does not auto-reload unless you set `DEPLOY_WATCH=1`.
 
 ## 5. 401 from GitHub
 
-1. Put `GITHUB_TOKEN` in **panel Variables**.
-2. Or make the repo public for the code tarball (you still need a token for the JSON database).
-3. Regenerate the PAT if it was revoked.
+`curl: (22) The requested URL returned error: 401` on the API tarball means GitHub rejected the **Authorization** header.
+
+- This repo is public. Use the **public** archive URL in section 3 (no `-H Authorization`).
+- `Authorization: Bearer ${GITHUB_TOKEN}` with an empty variable still sends `Bearer ` and GitHub returns 401.
+- A Discord bot token is not a GitHub PAT. Put a GitHub PAT in `GITHUB_TOKEN` only for the JSON database / private code.
 
 ## Why not `git clone`
 

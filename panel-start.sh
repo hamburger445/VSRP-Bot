@@ -57,16 +57,16 @@ PY
 
 _sync() {
   rm -f "$A"
-  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-    if ! _download_auth; then
-      echo "[GitHub] Token download failed (401 = bad/expired token or wrong scopes)."
-      echo "[GitHub] Trying public archive URL..."
-      _download_public
-    fi
+  if _download_public; then
+    echo "[GitHub] Public archive OK."
+  elif [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    echo "[GitHub] Public archive failed — trying token download..."
+    _download_auth
   else
-    echo "[GitHub] GITHUB_TOKEN not set in panel — using public download."
-    echo "         (Private repos: add GITHUB_TOKEN in panel Variables, not only .env)"
-    _download_public
+    echo "[GitHub] ERROR: public download failed and GITHUB_TOKEN is empty."
+    echo "         Do not send Authorization: Bearer with an empty token (GitHub returns 401)."
+    echo "         Add a GitHub PAT in panel Variables, or make the repo public."
+    exit 1
   fi
 
   echo "[GitHub] Extracting..."
