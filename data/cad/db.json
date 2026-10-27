@@ -1,7 +1,7 @@
 {
   "seq": {
     "SET": 14,
-    "bot_state": 30,
+    "bot_state": 31,
     "cad_audit": 12,
     "cad_dm_codes": 3,
     "cad_oauth_tokens": 1,
@@ -74,6 +74,11 @@
         "id": 8,
         "key": "erlc_status_message:1513730424310857819",
         "value": "1553921334457667716"
+      },
+      {
+        "id": 31,
+        "key": "shift_banned_role_id:1514314745946177787",
+        "value": "1564642516035182592"
       }
     ],
     "cad_audit": [
