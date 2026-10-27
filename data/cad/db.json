@@ -6,6 +6,7 @@
     "cad_oauth_tokens": 1,
     "cad_outbox": 4,
     "cad_users": 1,
+    "shop_items": 5,
     "users": 8
   },
   "tables": {
@@ -260,6 +261,58 @@
     "citation_tickets": [],
     "guild_settings": [],
     "shift_sessions": [],
+    "shop_items": [
+      {
+        "active": 1,
+        "category": "registration",
+        "description": "Valid for 2 months. Required to register vehicles.",
+        "id": 1,
+        "item_key": "drivers_license",
+        "name": "Driver's License",
+        "price": 37,
+        "stock": -1
+      },
+      {
+        "active": 1,
+        "category": "registration",
+        "description": "Valid for 1 month. Covers your registered vehicles.",
+        "id": 2,
+        "item_key": "insurance",
+        "name": "Vehicle Insurance",
+        "price": 31,
+        "stock": -1
+      },
+      {
+        "active": 1,
+        "category": "registration",
+        "description": "Renews one vehicle plate for 30 days.",
+        "id": 3,
+        "item_key": "vehicle_renewal",
+        "name": "Vehicle Registration Renewal",
+        "price": 32,
+        "stock": -1
+      },
+      {
+        "active": 1,
+        "category": "registration",
+        "description": "Restore a suspended or revoked driver's license to active.",
+        "id": 4,
+        "item_key": "license_buyback",
+        "name": "License Buy Back",
+        "price": 500,
+        "stock": -1
+      },
+      {
+        "active": 1,
+        "category": "registration",
+        "description": "Restore suspended vehicle and trailer registration privileges.",
+        "id": 5,
+        "item_key": "registration_buyback",
+        "name": "Registration Buy Back",
+        "price": 500,
+        "stock": -1
+      }
+    ],
     "trailers": [],
     "users": [
       {
