@@ -335,7 +335,7 @@
         "jti": "c5b78afbc4844e1580e080b80478e95c",
         "kind": "citation",
         "officer_id": 1391201462259810354,
-        "payload": "{\"agency\": \"Wytheville Police Department\", \"county\": \"WYTHE\", \"court_type\": \"General District Court (Traffic)\", \"court_month\": \"October\", \"court_day\": \"27\", \"court_year\": \"2026\", \"court_time\": \"10:44\", \"am_pm\": \"AM\", \"va_code\": \"Test \", \"local_code\": \"Test \", \"charge_description\": \"Test \", \"fine\": \"1999009\", \"commercial_motor_vehicle\": \"No\", \"hazardous_materials\": \"No\", \"resulted_in_fatality\": \"No\", \"highway_safety_corridor\": \"No\", \"issued_by\": \"Chf. mxboy2249 | WPD\", \"kind\": \"citation\"}",
+        "payload": "{\"agency\": \"Wytheville Police Department\", \"county\": \"WYTHE\", \"court_type\": \"General District Court (Traffic)\", \"court_month\": \"October\", \"court_day\": \"27\", \"court_year\": \"2026\", \"court_time\": \"10:44\", \"am_pm\": \"AM\", \"va_code\": \"Test \", \"local_code\": \"Test \", \"charge_description\": \"Test \", \"fine\": \"1999009\", \"commercial_motor_vehicle\": \"Yes\", \"hazardous_materials\": \"No\", \"resulted_in_fatality\": \"No\", \"highway_safety_corridor\": \"Yes\", \"issued_by\": \"Chf. mxboy2249 | WPD\", \"kind\": \"citation\"}",
         "subject_id": 1553828134288236626
       }
     ],
