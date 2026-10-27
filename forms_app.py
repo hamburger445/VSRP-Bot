@@ -234,6 +234,23 @@ async def submit_api(request: web.Request):
     return _json({"ok": True, "case_number": result["case_number"], "review_id": result.get("review_id")})
 
 
+_runner: web.AppRunner | None = None
+
+
+async def start_attached_server() -> web.AppRunner:
+    """Bind the editor on PORT so Render's web process (the Discord bot) stays healthy."""
+    global _runner
+    if _runner:
+        return _runner
+    host = form_bind_host()
+    port = form_bind_port()
+    _runner = web.AppRunner(make_app())
+    await _runner.setup()
+    await web.TCPSite(_runner, host, port).start()
+    log.info("Document editor on %s:%s public=%s", host, port, public_form_base() or "(unset)")
+    return _runner
+
+
 def make_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", home)
@@ -251,12 +268,7 @@ async def _async_main():
 
     load_config()
     await get_db()
-    host = form_bind_host()
-    port = form_bind_port()
-    log.info("Document editor on %s:%s public=%s", host, port, public_form_base() or "(unset)")
-    runner = web.AppRunner(make_app())
-    await runner.setup()
-    await web.TCPSite(runner, host, port).start()
+    await start_attached_server()
     while True:
         await __import__("asyncio").sleep(3600)
 

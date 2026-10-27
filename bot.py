@@ -105,6 +105,15 @@ class VSRPBot(commands.Bot):
         super().__init__(command_prefix=prefix, intents=intents)
 
     async def setup_hook(self):
+        import os
+
+        from utils.form_urls import on_render
+
+        bind_local = os.getenv("FORM_BIND_LOCAL", "").strip().lower() in {"1", "true", "yes", "on"}
+        if on_render() or bind_local:
+            from forms_app import start_attached_server
+
+            await start_attached_server()
         await get_db()
 
         @self.tree.error

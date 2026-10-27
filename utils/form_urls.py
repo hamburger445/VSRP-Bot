@@ -31,16 +31,32 @@ def _host_ok(host: str) -> bool:
         return True
 
 
+def on_render() -> bool:
+    return bool(
+        os.getenv("RENDER")
+        or os.getenv("RENDER_EXTERNAL_URL")
+        or os.getenv("RENDER_EXTERNAL_HOSTNAME")
+    )
+
+
 def public_form_base() -> str:
-    explicit = (os.getenv("PUBLIC_FORM_URL") or os.getenv("FORM_PUBLIC_URL") or "").strip().rstrip("/")
-    if not explicit:
-        return ""
-    parsed = urlparse(explicit if "://" in explicit else f"https://{explicit}")
-    if parsed.scheme != "https":
-        return ""
-    if not _host_ok(parsed.hostname or ""):
-        return ""
-    return f"https://{parsed.netloc}{parsed.path}".rstrip("/")
+    candidates = [
+        (os.getenv("PUBLIC_FORM_URL") or os.getenv("FORM_PUBLIC_URL") or "").strip().rstrip("/"),
+        (os.getenv("RENDER_EXTERNAL_URL") or "").strip().rstrip("/"),
+    ]
+    host = (os.getenv("RENDER_EXTERNAL_HOSTNAME") or "").strip().rstrip("/")
+    if host:
+        candidates.append(f"https://{host}")
+    for explicit in candidates:
+        if not explicit:
+            continue
+        parsed = urlparse(explicit if "://" in explicit else f"https://{explicit}")
+        if parsed.scheme != "https":
+            continue
+        if not _host_ok(parsed.hostname or ""):
+            continue
+        return f"https://{parsed.netloc}{parsed.path}".rstrip("/")
+    return ""
 
 
 def form_page_url(kind: str, token: str) -> str | None:

@@ -1,4 +1,30 @@
-# Host on WispByte (GitHub pull + auto-restart)
+# Host on Render (bot + citation website)
+
+Run **one** Render **Web Service** from this repo. That process is the Discord bot **and** the HTTPS document editor. Do not also run the bot on WispByte or you will have two bots.
+
+## Render
+
+1. Render → New → Web Service → this GitHub repo (`hamburger445/VSRP-Bot`).
+2. Runtime **Python**. Build `pip install -r requirements.txt`. Start **`python bot.py`**.
+3. Health check path: `/health`.
+4. Environment:
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `DISCORD_TOKEN` | Yes | Bot token |
+| `GITHUB_TOKEN` | Yes | PAT for the JSON database (`cad-data` branch) |
+| `BOT_DATABASE` | No | `github` |
+| `FORM_SECRET` | Recommended | Shared HMAC for form links |
+| `PUBLIC_FORM_URL` | No | Defaults to Render’s `https://YOUR-SERVICE.onrender.com` |
+
+5. After the first deploy, open `https://YOUR-SERVICE.onrender.com/health`. You should see `{"ok": true, "forms": true, ...}`.
+6. `/citation` **Open document editor** uses that HTTPS URL.
+
+If an old CAD service (`vsrp-cad`) is still running, change its start command to `python bot.py` or delete it.
+
+---
+
+# Host on WispByte (optional, GitHub pull + auto-restart)
 
 Run this bot on a **Python egg** (WispByte, Pterodactyl, or similar). Each start downloads the latest `main` tarball from GitHub. After the bot is online it checks GitHub about once a minute. When you push a new commit, the bot exits code **42**, the startup script pulls the new files, and the bot starts again. You do not need to click Restart for a normal code deploy.
 

@@ -1,1 +1,1 @@
-web: python forms_app.py
+web: python bot.py

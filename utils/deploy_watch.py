@@ -30,6 +30,10 @@ def _poll_seconds() -> int:
 
 
 def watch_enabled() -> bool:
+    from utils.form_urls import on_render
+
+    if on_render():
+        return False
     flag = os.getenv("DEPLOY_WATCH", "").strip().lower()
     if flag in {"0", "false", "no", "off"}:
         return False

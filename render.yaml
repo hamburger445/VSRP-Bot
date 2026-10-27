@@ -1,19 +1,17 @@
-# Document editor only — not the old CAD site.
+# Discord bot + citation/warrant editor (not CAD).
 services:
   - type: web
-    name: vsrp-forms
+    name: vsrp-bot
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python forms_app.py
+    startCommand: python bot.py
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
       - key: BOT_DATABASE
         value: github
-      - key: PUBLIC_FORM_URL
-        sync: false
       - key: DISCORD_TOKEN
         sync: false
       - key: GITHUB_TOKEN

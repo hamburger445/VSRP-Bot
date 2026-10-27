@@ -24,7 +24,7 @@ class WebForms(commands.Cog):
         if base:
             log.info("Document editor: %s", base)
         else:
-            log.warning("PUBLIC_FORM_URL is missing or not public HTTPS. Discord will use in-app forms.")
+            log.warning("No public HTTPS URL yet. On Render this is RENDER_EXTERNAL_URL after the first deploy.")
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
