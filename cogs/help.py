@@ -80,9 +80,6 @@ def _help_sections() -> dict[str, dict]:
                 ("/application-status", "All department applications & status"),
                 ("/pager send department message", "Page a department"),
                 ("/leo-panel", "Open the law enforcement panel"),
-                ("/cad", "Open the CAD website"),
-                ("/cad-status", "Your CAD unit status"),
-                ("/cad-panic", "Mark your CAD unit panic"),
             ],
         },
         "setup": {

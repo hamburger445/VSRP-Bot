@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 
+from datetime import datetime, timezone
+
+from utils.core import format_datetime
+from utils.helpers import officer_agency_name
 from utils.leo_forms import (
     CHARGE_CLASSES,
     CITATION_AGENCIES,
@@ -191,6 +195,7 @@ class WarrantCodeModal(discord.ui.Modal, title="Warrant — Code & Issue Date"):
         self.cog = cog
         self.member = member
         self.data = data
+        self.issued_datetime.default = format_datetime(datetime.now(timezone.utc))
 
     async def on_submit(self, interaction: discord.Interaction):
         self.data["va_code"] = self.va_code.value.strip()
@@ -307,7 +312,7 @@ class CitationDetailsModal(discord.ui.Modal, title="Virginia Uniform Summons"):
         self.data["local_code"] = (self.local_code.value or "").strip()
         self.data["charge_description"] = self.charge_description.value.strip()
         await interaction.response.send_modal(
-            CitationIssueModal(self.cog, self.member, self.data)
+            CitationIssueModal(self.cog, self.member, self.data, interaction.user)
         )
 
 
@@ -318,11 +323,14 @@ class CitationIssueModal(discord.ui.Modal, title="Citation — Issue"):
         max_length=200,
     )
 
-    def __init__(self, cog: "LawEnforcement", member: discord.Member, data: dict[str, Any]):
+    def __init__(self, cog: "LawEnforcement", member: discord.Member, data: dict[str, Any], officer: discord.Member):
         super().__init__()
         self.cog = cog
         self.member = member
         self.data = data
+        agency = officer_agency_name(officer)
+        bits = [officer.display_name, agency]
+        self.issued_by.default = ", ".join(x for x in bits if x)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -335,6 +343,9 @@ class CitationIssueModal(discord.ui.Modal, title="Citation — Issue"):
             self.data["am_pm"] = "AM"
         for key in ("commercial_motor_vehicle", "hazardous_materials", "resulted_in_fatality", "highway_safety_corridor"):
             self.data.setdefault(key, "N")
+        if not self.data.get("agency"):
+            self.data["agency"] = officer_agency_name(interaction.user)
+        self.data["county"] = self.data.get("county") or "WYTHE"
         await self.cog._finalize_citation(interaction, self.member, self.data, fine)
 
 
@@ -351,11 +362,15 @@ class ServeWarrantModal(discord.ui.Modal, title="Served Warrant"):
         max_length=120,
     )
 
-    def __init__(self, cog: "LawEnforcement", warrant_id: int, warrant_row: dict):
+    def __init__(self, cog: "LawEnforcement", warrant_id: int, warrant_row: dict, officer: discord.Member):
         super().__init__()
         self.cog = cog
         self.warrant_id = warrant_id
         self.warrant_row = warrant_row
+        agency = officer_agency_name(officer)
+        self.arresting_officer.default = officer.display_name[:120]
+        self.badge_agency.default = ", ".join(x for x in [agency, "Wythe County"] if x)[:200]
+        self.served_datetime.default = format_datetime(datetime.now(timezone.utc))
 
     async def on_submit(self, interaction: discord.Interaction):
         serve_data = {
@@ -386,7 +401,7 @@ class ActiveWarrantSelect(discord.ui.Select):
         if not row:
             await interaction.response.send_message("Warrant not found.", ephemeral=True)
             return
-        await interaction.response.send_modal(ServeWarrantModal(self.cog, warrant_id, row))
+        await interaction.response.send_modal(ServeWarrantModal(self.cog, warrant_id, row, interaction.user))
 
 
 class ServeWarrantView(discord.ui.View):

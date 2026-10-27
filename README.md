@@ -1,6 +1,6 @@
 # VSRP Discord Bot
 
-Python Discord bot for urban roleplay servers. Uses PostgreSQL (Neon) and interactive dashboards.
+Python Discord bot for urban roleplay servers. Uses a GitHub JSON database by default and interactive dashboards.
 
 ## Main Commands
 
@@ -38,8 +38,8 @@ Python Discord bot for urban roleplay servers. Uses PostgreSQL (Neon) and intera
 1. Copy `config.example.yaml` to `config.yaml` and fill in your server IDs (or use your existing `config.yaml`)
 2. Copy `.env.example` to `.env` and set:
    - `DISCORD_TOKEN`
-   - `DATABASE_URL` (PostgreSQL / Neon)
-   - `GITHUB_TOKEN` (optional — mirrors guild permissions to the repo under `data/`)
+   - `GITHUB_TOKEN` (required for the JSON database and permission mirrors)
+   - `BOT_DATABASE=github` (default)
 3. `pip install -r requirements.txt`
 4. `python bot.py`
 
@@ -51,11 +51,11 @@ When `GITHUB_TOKEN` is set, permission changes from `/setup-permissions` and `-r
 
 **Never commit `.env` or tokens to GitHub.**
 
-## CAD / MDT website
+## Database
 
-See [docs/CAD.md](docs/CAD.md). The Discord bot stays on the game panel (`python bot.py`). The CAD is a FastAPI + React app that uses the **same PostgreSQL database**.
+With `BOT_DATABASE=github` and `GITHUB_TOKEN`, the bot stores records as JSON in the repo (`data/cad/db.json` on the `cad-data` branch by default) so Neon/Postgres is not required. Guild permission mirrors still use `data/guild_permissions/` on the configured GitHub branch.
 
-Local: `uvicorn cad.app:app --port 8000` and `cd web && npm run dev`. Render blueprint: `render.yaml` (web only — no second bot).
+`/warrant` and `/serve-warrant` attach a filled roleplay PDF in the warrants channel.
 
 ## Container hosting (GitHub pull on start)
 

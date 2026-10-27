@@ -53,7 +53,6 @@ COGS = [
     "cogs.shifts",
     "cogs.pd_setup",
     "cogs.setup",
-    "cogs.cad",
 ]
 
 MAIN_ONLY_MODULES = frozenset({
@@ -73,7 +72,6 @@ MAIN_ONLY_MODULES = frozenset({
     "cogs.verification",
     "cogs.applications",
     "cogs.autorole",
-    "cogs.cad",
 })
 
 SHIFT_ONLY_MODULES = frozenset({"cogs.shifts"})

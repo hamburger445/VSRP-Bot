@@ -1,9 +1,13 @@
+import json
+from datetime import datetime, timezone
+
 import discord
 
-from utils.helpers import log_action
-from utils.core import load_config
+from utils.core import format_datetime, load_config
 from utils.database import get_db
-from utils.helpers import notify_warrant_issued
+from utils.helpers import log_action, notify_warrant_issued
+from utils.leo_case import allocate_case_number, format_case_number
+from utils.leo_pdf import pdf_file, warrant_pdf_bytes
 from utils.users import ensure_user, set_license_suspended
 
 
@@ -42,12 +46,21 @@ async def enforce_ticket_thresholds(bot: discord.Client, guild: discord.Guild, u
         )
         if not existing:
             reason = f"Automatic warrant: {unpaid} unpaid tickets"
+            case_no = await allocate_case_number()
+            form = {
+                "warrant_type": "Arrest",
+                "charge_class": "Misdemeanor",
+                "jurisdiction": "County",
+                "county": "WYTHE",
+                "code_description": reason,
+                "issued_datetime": format_datetime(datetime.now(timezone.utc)),
+            }
             await db.execute(
                 """
-                INSERT INTO warrants (user_id, reason, issued_by, active, status)
-                VALUES (?, ?, 0, 1, 'active')
+                INSERT INTO warrants (user_id, reason, issued_by, active, status, form_json, case_number)
+                VALUES (?, ?, 0, 1, 'active', ?, ?)
                 """,
-                (user_id, reason),
+                (user_id, reason, json.dumps(form), case_no),
             )
             await db.commit()
             await log_action(
@@ -55,7 +68,7 @@ async def enforce_ticket_thresholds(bot: discord.Client, guild: discord.Guild, u
                 "warrant",
                 0,
                 target_id=user_id,
-                details={"automatic": True, "unpaid_tickets": unpaid},
+                details={"automatic": True, "unpaid_tickets": unpaid, "case_number": case_no},
                 channel_key="warrants",
             )
             await notify_warrant_issued(
@@ -65,6 +78,21 @@ async def enforce_ticket_thresholds(bot: discord.Client, guild: discord.Guild, u
                 automatic=True,
                 guild=guild,
             )
+            channel_id = load_config().get("channels", {}).get("warrants")
+            if channel_id and guild:
+                ch = guild.get_channel(channel_id)
+                if ch:
+                    member = guild.get_member(user_id)
+                    pdf = warrant_pdf_bytes(
+                        form,
+                        case_no=case_no,
+                        subject_label=str(member) if member else str(user_id),
+                        reason=reason,
+                    )
+                    await ch.send(
+                        content=f"Automatic warrant **#{format_case_number(case_no)}**",
+                        file=pdf_file(pdf, f"warrant-{format_case_number(case_no)}.pdf"),
+                    )
 
 
 async def check_registration_allowed(user_id: int) -> tuple[bool, str]:

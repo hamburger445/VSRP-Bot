@@ -54,7 +54,7 @@ def build_warrant_embed(
         color=0x992D22,
     )
     body = (
-        f"**COUNTY OF:** WYTHE\n\n"
+        f"**COUNTY OF:** {data.get('county') or 'WYTHE'}\n\n"
         f"GENERAL DISTRICT COURT: `{_x_mark(courts.get('general_district'))}`\n"
         f"CRIMINAL: `{_x_mark(courts.get('criminal'))}`\n"
         f"TRAFFIC: `{_x_mark(courts.get('traffic'))}`\n"
@@ -118,7 +118,7 @@ def build_citation_embed(
     )
     embed.description = (
         f"**Agency:** {data.get('agency', '—')}\n\n"
-        f"**YOU ARE SUMMONED TO APPEAR IN THE COUNTY OF:** WYTHE\n\n"
+        f"**YOU ARE SUMMONED TO APPEAR IN THE COUNTY OF:** {data.get('county') or 'WYTHE'}\n\n"
         f"**Court:** {court}\n"
         f"**ON** {data.get('court_date', '—')} **AT** {data.get('court_time', '—')} "
         f"**{data.get('am_pm', 'AM')}**\n\n"

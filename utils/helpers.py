@@ -30,6 +30,29 @@ def department_display_name(key: str) -> str:
     return names.get(key) or _DEFAULT_NAMES.get(key, key.replace("_", " ").title())
 
 
+_AGENCIES = {
+    "police1": "Wythe County Sheriffs Office",
+    "police2": "Wytheville Police Department",
+    "state_police": "Department of State Police",
+    "rural_pd": "Rural Retreat Police Department",
+}
+
+
+def officer_agency_name(member: discord.abc.User | None) -> str:
+    if member is None or not getattr(member, "roles", None):
+        return ""
+    depts = load_config().get("roles", {}).get("departments") or {}
+    names = load_config().get("roles", {}).get("department_names") or {}
+    have = {r.id for r in member.roles}
+    for key, rid in depts.items():
+        try:
+            if int(rid or 0) in have:
+                return _AGENCIES.get(key) or names.get(key) or department_display_name(key)
+        except (TypeError, ValueError):
+            continue
+    return ""
+
+
 # --- emojis ---
 
 

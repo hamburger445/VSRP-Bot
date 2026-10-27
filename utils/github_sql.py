@@ -1,4 +1,4 @@
-"""In-memory table engine used as a GitHub-backed Postgres stand-in for CAD SQL."""
+"""In-memory table engine used as a GitHub-backed Postgres stand-in for the bot."""
 
 from __future__ import annotations
 
@@ -352,7 +352,8 @@ def run(state: dict[str, Any], sql: str, args: tuple = (), mode: str = "fetch") 
         n = sum(1 for r in _table(state, table) if _match(r, _where(sql), args))
         if mode == "fetchval":
             return n
-        return [{"count": n}] if mode == "fetch" else {"count": n}
+        row = {"count": n, "cnt": n}
+        return [row] if mode == "fetch" else row
 
     if upper.startswith("SELECT"):
         table = _from_table(sql)

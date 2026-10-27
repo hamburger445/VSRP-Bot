@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from cad.github_sql import dump_state, load_state, run, utcnow
+from utils.github_sql import dump_state, load_state, run, utcnow
 
 
 def test_select_one():
@@ -58,45 +58,16 @@ def test_on_conflict_increment():
     assert row["value"] == "2"
 
 
-def test_login_then_lookup_session():
-    from cad.security import hash_token
-
+def test_count_alias():
     state = load_state({})
-    uid = 1513602696379105362
-    raw = "test-session-token"
-    run(state, "INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", (uid,), "execute")
-    run(
+    run(state, "INSERT INTO citation_tickets (user_id, payment_status) VALUES ($1, 'unpaid')", (1,), "execute")
+    row = run(
         state,
-        """
-        INSERT INTO cad_users (
-            discord_user_id, username, global_name, avatar_hash, last_login_at,
-            last_role_sync_at, main_roles, fd_roles, pd_roles, in_main_guild, status
-        )
-        VALUES ($1,$2,$3,$4,NOW(),NOW(),$5,$6,$7,TRUE,'active')
-        ON CONFLICT (discord_user_id) DO UPDATE SET
-            username = EXCLUDED.username,
-            global_name = EXCLUDED.global_name,
-            avatar_hash = EXCLUDED.avatar_hash,
-            last_login_at = NOW(),
-            last_role_sync_at = NOW(),
-            main_roles = EXCLUDED.main_roles,
-            fd_roles = EXCLUDED.fd_roles,
-            pd_roles = EXCLUDED.pd_roles,
-            in_main_guild = TRUE
-        """,
-        (uid, "alice", "Alice", "abc", "[]", "[]", "[]"),
-        "execute",
+        "SELECT COUNT(*) AS cnt FROM citation_tickets WHERE user_id = $1 AND payment_status = 'unpaid'",
+        (1,),
+        "fetchrow",
     )
-    run(
-        state,
-        "INSERT INTO cad_sessions (id, token_hash, discord_user_id, expires_at) VALUES ($1,$2,$3,$4)",
-        ("sid-1", hash_token(raw), uid, utcnow() + timedelta(hours=12)),
-        "execute",
-    )
-    sess = run(state, "SELECT * FROM cad_sessions WHERE token_hash = $1", (hash_token(raw),), "fetchrow")
-    assert sess is not None
-    user = run(state, "SELECT * FROM cad_users WHERE discord_user_id = $1", (uid,), "fetchrow")
-    assert user["username"] == "alice"
+    assert row["cnt"] == 1
 
 
 def test_roundtrip_datetime():

@@ -29,6 +29,7 @@ from utils.leo_forms import (
     warrant_form_to_reason,
     warrant_status_emoji,
 )
+from utils.leo_pdf import pdf_file, served_warrant_pdf_bytes, warrant_pdf_bytes
 from utils.permissions import is_leo
 from utils.tickets import enforce_ticket_thresholds
 
@@ -163,6 +164,8 @@ class LawEnforcement(commands.Cog):
             await defer(interaction, ephemeral=True)
 
         reason = warrant_form_to_reason(form_data)
+        form_data.setdefault("county", "WYTHE")
+        form_data.setdefault("issued_by", interaction.user.display_name)
 
         try:
             from utils.leo_records import create_warrant
@@ -201,14 +204,23 @@ class LawEnforcement(commands.Cog):
             target_id=member.id,
             details={"case_number": case_no, "reason": reason},
         )
+        pdf = warrant_pdf_bytes(
+            form_data,
+            case_no=case_no,
+            subject_label=str(member),
+            issuer_label=interaction.user.display_name,
+            reason=reason,
+        )
+        filename = f"warrant-{format_case_number(case_no)}.pdf"
         channel_id = load_config().get("channels", {}).get("warrants")
         if channel_id and interaction.guild:
             ch = interaction.guild.get_channel(channel_id)
             if ch:
-                await ch.send(embed=embed)
+                await ch.send(embed=embed, file=pdf_file(pdf, filename))
         await interaction.followup.send(
             f"{warrant_status_emoji(1, 'active')} Warrant **#{format_case_number(case_no)}** created for {member.mention}.",
             ephemeral=True,
+            file=pdf_file(pdf, filename),
         )
 
     async def _finalize_serve_warrant(
@@ -245,12 +257,19 @@ class LawEnforcement(commands.Cog):
         user_id = warrant_row["user_id"]
         member = interaction.guild.get_member(user_id) if interaction.guild else None
         embed = build_served_warrant_embed(form_data, serve_data, case_no=case_no, subject=member)
+        pdf = served_warrant_pdf_bytes(
+            form_data,
+            serve_data,
+            case_no=case_no,
+            subject_label=str(member) if member else str(user_id),
+        )
+        filename = f"served-warrant-{format_case_number(case_no)}.pdf"
 
         channel_id = load_config().get("channels", {}).get("warrants")
         if channel_id and interaction.guild:
             ch = interaction.guild.get_channel(channel_id)
             if ch:
-                await ch.send(embed=embed)
+                await ch.send(embed=embed, file=pdf_file(pdf, filename))
 
         await log_action(
             self.bot,
@@ -259,10 +278,10 @@ class LawEnforcement(commands.Cog):
             target_id=user_id,
             details={"warrant_id": warrant_id, "case_number": case_no},
         )
-        await reply(
-            interaction,
+        await interaction.followup.send(
             f"{warrant_status_emoji(0, 'served')} Warrant **#{format_case_number(case_no)}** marked **served** (record kept on file).",
             ephemeral=True,
+            file=pdf_file(pdf, filename),
         )
 
     @app_commands.command(name="citation", description="Issue a Virginia Uniform Summons (full form)")

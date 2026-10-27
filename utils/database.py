@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -135,7 +136,9 @@ class Database:
         async def _run(pool: asyncpg.Pool):
             async with pool.acquire(timeout=_acquire_timeout()) as conn:
                 status = await conn.execute(query, *params)
-                parts = status.split()
+                if isinstance(status, dict):
+                    return ExecuteResult(rowcount=1)
+                parts = str(status).split()
                 count = int(parts[-1]) if parts and parts[-1].isdigit() else 0
                 return ExecuteResult(rowcount=count)
 
@@ -181,6 +184,10 @@ async def _create_pool(*, initialize_schema: bool) -> tuple[asyncpg.Pool, Databa
 async def _reconnect_pool() -> Database:
     """Single-flight pool recreate after a transient connection failure."""
     global _pool, _db, _schema_initialized
+    from utils.github_db import github_enabled
+
+    if github_enabled() and _db is not None:
+        return _db
     async with _pool_lock:
         if _db is not None and _pool is not None:
             try:
@@ -215,15 +222,39 @@ async def _reconnect_pool() -> Database:
         return _db
 
 
+class GithubPool:
+    """asyncpg-like pool that runs SQL against the GitHub JSON store."""
+
+    @asynccontextmanager
+    async def acquire(self, timeout: float | None = None):
+        from utils.github_db import github_connection
+
+        async with github_connection() as conn:
+            yield conn
+
+    async def close(self) -> None:
+        from utils.github_db import persist
+
+        await persist()
+
+
 async def get_db() -> Database:
     global _pool, _db, _schema_initialized
     if _db is not None:
         return _db
     async with _pool_lock:
         if _db is None:
-            _pool, _db = await _create_pool(initialize_schema=True)
-            _schema_initialized = True
-            log.info("PostgreSQL pool ready")
+            from utils.github_db import github_enabled
+
+            if github_enabled():
+                _pool = GithubPool()
+                _db = Database(_pool)
+                _schema_initialized = True
+                log.info("GitHub JSON database ready")
+            else:
+                _pool, _db = await _create_pool(initialize_schema=True)
+                _schema_initialized = True
+                log.info("PostgreSQL pool ready")
     return _db
 
 
@@ -539,12 +570,7 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         for stmt in statements:
             await conn.execute(stmt)
         await _migrate_legacy(conn)
-        try:
-            from cad.schema import init_cad_schema
-
-            await init_cad_schema(conn)
-        except Exception as exc:
-            log.exception("CAD schema init failed: %s", exc)
+        pass
 
 
 async def _add_column_if_missing(

@@ -10,10 +10,6 @@ bot:
   activity_name: "VSRC Sessions"
   activity_type: "watching"
 
-cad:
-  public_url: ""
-  require_dm_verify: true
-
 guild:
   id: 1244711126348992603
 

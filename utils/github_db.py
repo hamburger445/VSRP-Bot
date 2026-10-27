@@ -1,4 +1,4 @@
-"""Persist CAD tables as JSON in the GitHub repo (Contents API)."""
+"""Persist bot tables as JSON in the GitHub repo (Contents API)."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any
 
-from cad.github_sql import dump_state, load_state, run
 from utils.core import get_github_token
+from utils.github_sql import dump_state, load_state, run
 from utils.github_store import github_get_json, github_put_json
 
-log = logging.getLogger("vsrp_bot.cad.github_db")
+log = logging.getLogger("vsrp_bot.github_db")
 
 _lock = asyncio.Lock()
 _state: dict[str, Any] | None = None
@@ -20,20 +20,19 @@ _dirty = False
 
 
 def db_path() -> str:
-    return os.getenv("CAD_GITHUB_PATH", "data/cad/db.json")
+    return os.getenv("GITHUB_DB_PATH") or os.getenv("CAD_GITHUB_PATH", "data/cad/db.json")
 
 
 def data_branch() -> str:
-    """Keep CAD JSON off main so Render does not redeploy on every login."""
-    return os.getenv("CAD_GITHUB_BRANCH", "cad-data")
+    return os.getenv("GITHUB_DB_BRANCH") or os.getenv("CAD_GITHUB_BRANCH", "cad-data")
 
 
 def github_enabled() -> bool:
-    mode = os.getenv("CAD_DATABASE", "auto").strip().lower()
-    if mode in {"github", "gh", "json"}:
-        return True
+    mode = (os.getenv("BOT_DATABASE") or os.getenv("CAD_DATABASE") or "github").strip().lower()
     if mode in {"postgres", "postgresql", "neon"}:
         return False
+    if mode in {"github", "gh", "json", "auto"}:
+        return bool(get_github_token())
     return bool(get_github_token())
 
 
@@ -45,7 +44,7 @@ async def _ensure_loaded() -> None:
     if not isinstance(raw, dict):
         raw = await github_get_json(db_path())
     _state = load_state(raw if isinstance(raw, dict) else {})
-    log.info("CAD GitHub database loaded (%s tables)", len(_state.get("tables") or {}))
+    log.info("GitHub database loaded (%s tables) from %s@%s", len(_state.get("tables") or {}), db_path(), data_branch())
 
 
 async def persist() -> None:
@@ -55,14 +54,14 @@ async def persist() -> None:
     ok = await github_put_json(
         db_path(),
         dump_state(_state),
-        message="Update CAD JSON database",
+        message="Update bot JSON database",
         branch=data_branch(),
     )
     if ok:
         _dirty = False
-        log.info("CAD GitHub database saved")
+        log.info("GitHub database saved")
     else:
-        log.warning("CAD GitHub database save failed")
+        log.warning("GitHub database save failed")
 
 
 class GithubConn:
@@ -85,9 +84,8 @@ class GithubConn:
         global _dirty
         await _ensure_loaded()
         result = run(_state, sql, args, "execute")
-        text = str(sql)
-        upper = text.lstrip().upper()
-        if upper.startswith(("INSERT", "UPDATE", "DELETE")) and "last_seen_at" not in text:
+        upper = str(sql).lstrip().upper()
+        if upper.startswith(("INSERT", "UPDATE", "DELETE")):
             _dirty = True
         return result
 

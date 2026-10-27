@@ -61,8 +61,8 @@ Law enforcement (LEO)
 ---------------------
 - /leo-panel — panel for LEO actions.
 - /citation — Virginia Uniform Summons (dropdowns + multi-step form, case #, permanent record).
-- /warrant — warrant of arrest/search form (VA code, accused info, courts, case #).
-- /serve-warrant — mark warrant served (🟢 on record; no longer active).
+- /warrant — warrant of arrest/search form (VA code, accused info, courts, case #). Posts a filled PDF.
+- /serve-warrant — mark warrant served (🟢 on record; no longer active). Posts a served-warrant PDF.
 - /removewarrant — administratively clear active warrant (⚪ on record).
 - /warrant-check — full warrant history with 🔴 active / 🟢 served / ⚪ cleared.
 - /pager send — page a department.
@@ -142,7 +142,7 @@ Admin & owners
 Setup & deploy
 --------------
 - Config in config.yaml (new keys merge from config.example.yaml on bot start).
-- PostgreSQL database for cases, economy, tickets, permissions, soft bans, etc.
+- GitHub JSON database (`BOT_DATABASE=github`, `data/cad/db.json` on `cad-data`) for cases, economy, tickets, warrants, etc.
 - GitHub deploy: panel pulls latest code, keeps .env and config.yaml, runs bot.
 - Permissions can mirror to GitHub data folder when saved.
 
