@@ -1,15 +1,18 @@
 {
   "seq": {
     "SET": 14,
-    "bot_state": 59,
+    "bot_state": 60,
     "cad_audit": 12,
     "cad_dm_codes": 3,
     "cad_oauth_tokens": 1,
     "cad_outbox": 4,
     "cad_users": 1,
+    "citation_tickets": 1,
+    "economy_accounts": 1,
     "form_drafts": 2,
+    "form_reviews": 1,
     "shop_items": 5,
-    "users": 8
+    "users": 9
   },
   "tables": {
     "SET": [
@@ -90,6 +93,11 @@
         "id": 33,
         "key": "shift_ban_infra_v1",
         "value": "1"
+      },
+      {
+        "id": 60,
+        "key": "leo_case_sequence",
+        "value": "0"
       }
     ],
     "cad_audit": [
@@ -318,7 +326,26 @@
         "username": "mr.kujo1"
       }
     ],
-    "citation_tickets": [],
+    "citation_tickets": [
+      {
+        "case_number": "0000",
+        "fine": 1999009,
+        "form_json": "{\"agency\": \"Wytheville Police Department\", \"county\": \"WYTHE\", \"court_type\": \"General District Court (Traffic)\", \"court_month\": \"October\", \"court_day\": \"27\", \"court_year\": \"2026\", \"court_time\": \"10:44\", \"am_pm\": \"AM\", \"va_code\": \"Test \", \"local_code\": \"Test \", \"charge_description\": \"Test \", \"fine\": \"1999009\", \"commercial_motor_vehicle\": \"Yes\", \"hazardous_materials\": \"No\", \"resulted_in_fatality\": \"No\", \"highway_safety_corridor\": \"Yes\", \"issued_by\": \"Chf. mxboy2249 | WPD\", \"kind\": \"citation\", \"court_date\": \"October 27, 2026\"}",
+        "id": 1,
+        "issued_by": 1391201462259810354,
+        "payment_status": "unpaid",
+        "user_id": 1553828134288236626,
+        "violation": "Test "
+      }
+    ],
+    "economy_accounts": [
+      {
+        "bank": 0,
+        "id": 1,
+        "user_id": 1553828134288236626,
+        "wallet": 1000
+      }
+    ],
     "form_drafts": [
       {
         "guild_id": 1,
@@ -336,6 +363,19 @@
         "kind": "citation",
         "officer_id": 1391201462259810354,
         "payload": "{\"agency\": \"Wytheville Police Department\", \"county\": \"WYTHE\", \"court_type\": \"General District Court (Traffic)\", \"court_month\": \"October\", \"court_day\": \"27\", \"court_year\": \"2026\", \"court_time\": \"10:44\", \"am_pm\": \"AM\", \"va_code\": \"Test \", \"local_code\": \"Test \", \"charge_description\": \"Test \", \"fine\": \"1999009\", \"commercial_motor_vehicle\": \"Yes\", \"hazardous_materials\": \"No\", \"resulted_in_fatality\": \"No\", \"highway_safety_corridor\": \"Yes\", \"issued_by\": \"Chf. mxboy2249 | WPD\", \"kind\": \"citation\"}",
+        "subject_id": 1553828134288236626
+      }
+    ],
+    "form_reviews": [
+      {
+        "case_number": "0000",
+        "guild_id": 1244711126348992603,
+        "id": 1,
+        "jti": "c5b78afbc4844e1580e080b80478e95c",
+        "kind": "citation",
+        "officer_id": 1391201462259810354,
+        "record_id": 1,
+        "status": "pending",
         "subject_id": 1553828134288236626
       }
     ],
@@ -400,6 +440,10 @@
       {
         "id": 1,
         "user_id": 1391201462259810354
+      },
+      {
+        "id": 9,
+        "user_id": 1553828134288236626
       }
     ],
     "vehicles": [],
