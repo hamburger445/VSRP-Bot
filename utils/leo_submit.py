@@ -22,7 +22,7 @@ from utils.leo_forms import (
 from utils.leo_pdf import citation_pdf_bytes, pdf_file, served_warrant_pdf_bytes, warrant_pdf_bytes
 from utils.tickets import enforce_ticket_thresholds
 
-log = logging.getLogger("vsrp_bot.leo_submit")
+log = logging.getLogger("wcrp_bot.leo_submit")
 
 
 async def _post_record(
@@ -41,8 +41,8 @@ async def _post_record(
     view = None
     if review_id:
         view = discord.ui.View(timeout=None)
-        view.add_item(discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"vsrpdoc:approve:{review_id}"))
-        view.add_item(discord.ui.Button(label="Reject", style=discord.ButtonStyle.danger, custom_id=f"vsrpdoc:reject:{review_id}"))
+        view.add_item(discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"wcrpdoc:approve:{review_id}"))
+        view.add_item(discord.ui.Button(label="Reject", style=discord.ButtonStyle.danger, custom_id=f"wcrpdoc:reject:{review_id}"))
     posted = False
     channel_id = load_config().get("channels", {}).get(channel_key)
     if channel_id and guild:

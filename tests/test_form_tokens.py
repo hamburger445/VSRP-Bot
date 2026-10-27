@@ -29,21 +29,21 @@ def test_form_token_rejects_tamper(monkeypatch):
 def test_public_form_base(monkeypatch):
     monkeypatch.delenv("RENDER_EXTERNAL_URL", raising=False)
     monkeypatch.delenv("RENDER_EXTERNAL_HOSTNAME", raising=False)
-    monkeypatch.setenv("PUBLIC_FORM_URL", "https://vsrp-bot.onrender.com/")
-    assert public_form_base() == "https://vsrp-bot.onrender.com"
+    monkeypatch.setenv("PUBLIC_FORM_URL", "https://wcrp-bot.onrender.com/")
+    assert public_form_base() == "https://wcrp-bot.onrender.com"
 
 
 def test_public_form_base_uses_render_url(monkeypatch):
     monkeypatch.delenv("PUBLIC_FORM_URL", raising=False)
     monkeypatch.delenv("FORM_PUBLIC_URL", raising=False)
-    monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://vsrp-bot.onrender.com")
-    assert public_form_base() == "https://vsrp-bot.onrender.com"
+    monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://wcrp-bot.onrender.com")
+    assert public_form_base() == "https://wcrp-bot.onrender.com"
 
 
 def test_public_form_base_rejects_localhost_and_http(monkeypatch):
     monkeypatch.setenv("PUBLIC_FORM_URL", "http://127.0.0.1:8080")
     assert public_form_base() == ""
-    monkeypatch.setenv("PUBLIC_FORM_URL", "http://vsrp-forms.onrender.com")
+    monkeypatch.setenv("PUBLIC_FORM_URL", "http://wcrp-bot.onrender.com")
     assert public_form_base() == ""
     monkeypatch.setenv("PUBLIC_FORM_URL", "https://1.2.3.4")
     assert public_form_base() == ""

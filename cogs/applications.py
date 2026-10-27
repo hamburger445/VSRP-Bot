@@ -28,7 +28,7 @@ from utils.embeds import build_embed, build_error_embed, build_success_embed
 from utils.permissions import is_staff
 from utils.verification import is_verified_user
 
-log = logging.getLogger("vsrp_bot.applications")
+log = logging.getLogger("wcrp_bot.applications")
 
 
 async def _has_pending_application(user_id: int, department: str = "civilian") -> bool:

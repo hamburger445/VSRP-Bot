@@ -28,7 +28,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
-log = logging.getLogger("vsrp_bot")
+log = logging.getLogger("wcrp_bot")
 
 COGS = [
     "cogs.erlc_status",

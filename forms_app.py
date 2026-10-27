@@ -22,7 +22,7 @@ from utils.leo_submit import submit_citation, submit_serve_warrant, submit_warra
 
 load_dotenv(ROOT / ".env", override=True)
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-log = logging.getLogger("vsrp_forms")
+log = logging.getLogger("wcrp_forms")
 FORMS = ROOT / "webforms"
 
 

@@ -7,7 +7,7 @@ from discord.ext import commands
 from utils.core import is_main_guild, load_config
 from utils.verification import pending_verify_role_id, verification_channel_id
 
-log = logging.getLogger("vsrp_bot.autorole")
+log = logging.getLogger("wcrp_bot.autorole")
 
 
 class AutoRole(commands.Cog):

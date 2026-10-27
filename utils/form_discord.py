@@ -10,7 +10,7 @@ import aiohttp
 
 from utils.core import get_token, load_config
 
-log = logging.getLogger("vsrp_bot.form_discord")
+log = logging.getLogger("wcrp_bot.form_discord")
 API = "https://discord.com/api/v10"
 
 
@@ -118,13 +118,13 @@ def review_components(review_id: int) -> list:
                     "type": 2,
                     "style": 3,
                     "label": "Approve",
-                    "custom_id": f"vsrpdoc:approve:{int(review_id)}",
+                    "custom_id": f"wcrpdoc:approve:{int(review_id)}",
                 },
                 {
                     "type": 2,
                     "style": 4,
                     "label": "Reject",
-                    "custom_id": f"vsrpdoc:reject:{int(review_id)}",
+                    "custom_id": f"wcrpdoc:reject:{int(review_id)}",
                 },
             ],
         }

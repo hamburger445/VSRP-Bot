@@ -9,7 +9,7 @@ import discord
 from utils.core import load_config
 from utils.database import get_db
 
-log = logging.getLogger("vsrp_bot.helpers")
+log = logging.getLogger("wcrp_bot.helpers")
 
 # --- departments ---
 

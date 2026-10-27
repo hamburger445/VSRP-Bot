@@ -251,7 +251,7 @@ class LawEnforcement(commands.Cog):
             return
         await reply(
             interaction,
-            "Set PUBLIC_FORM_URL to your Render HTTPS URL (example: https://vsrp-forms.onrender.com).",
+            "Set PUBLIC_FORM_URL to your Render HTTPS URL (example: https://wcrp-bot.onrender.com).",
             ephemeral=True,
         )
 

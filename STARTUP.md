@@ -20,7 +20,7 @@ Run **one** Render **Web Service** from this repo. That process is the Discord b
 5. After the first deploy, open `https://YOUR-SERVICE.onrender.com/health`. You should see `{"ok": true, "forms": true, ...}`.
 6. `/citation` **Open document editor** uses that HTTPS URL.
 
-If an old CAD service (`vsrp-cad`) is still running, change its start command to `python bot.py` or delete it.
+If an old CAD service (`old-cad`) is still running, change its start command to `python bot.py` or delete it.
 
 ---
 
@@ -107,12 +107,12 @@ Local `python bot.py` does not auto-reload unless you set `DEPLOY_WATCH=1`.
 
 ## 6. Document editor (Render HTTPS)
 
-The editor is **not** hosted on WispByte. That game port is why the browser sat on an infinite spinner. Deploy `forms_app.py` on Render (`render.yaml` service `vsrp-forms`).
+The editor is **not** hosted on WispByte. That game port is why the browser sat on an infinite spinner. Deploy `forms_app.py` on Render (`render.yaml` service `wcrp-bot`).
 
 On **both** Render and WispByte set the same:
 
 ```
-PUBLIC_FORM_URL=https://vsrp-forms.onrender.com
+PUBLIC_FORM_URL=https://wcrp-bot.onrender.com
 FORM_SECRET=a-long-random-string
 DISCORD_TOKEN=...
 GITHUB_TOKEN=...

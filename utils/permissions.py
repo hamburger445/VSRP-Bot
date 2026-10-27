@@ -8,7 +8,7 @@ import discord
 from utils.core import fd_guild_id, is_main_guild, is_shift_guild, load_config, pd_guild_id
 from utils.database import DatabaseError, get_db
 
-log = logging.getLogger("vsrp_bot.permissions")
+log = logging.getLogger("wcrp_bot.permissions")
 
 PERMISSION_DEFINITIONS: dict[str, dict[str, str]] = {
     "staff": {

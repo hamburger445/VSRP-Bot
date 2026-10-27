@@ -8,7 +8,7 @@ from utils.core import get_state, get_erlc_server_key, load_config, set_state
 from utils.database import DatabaseError, DatabaseTimeoutError
 from utils.erlc import build_error_embed, build_server_embed, fetch_server_data
 
-log = logging.getLogger("vsrp_bot.erlc_status")
+log = logging.getLogger("wcrp_bot.erlc_status")
 
 
 class ErlcStatus(commands.Cog):

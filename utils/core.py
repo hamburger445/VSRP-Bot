@@ -22,7 +22,7 @@ _config_materialized = False
 
 load_dotenv(ENV_PATH, override=True)
 
-log = logging.getLogger("vsrp_bot.core")
+log = logging.getLogger("wcrp_bot.core")
 
 try:
     from zoneinfo import ZoneInfo

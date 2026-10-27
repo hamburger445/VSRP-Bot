@@ -8,7 +8,7 @@ import asyncpg
 
 from utils.core import get_database_url, load_config
 
-log = logging.getLogger("vsrp_bot.db")
+log = logging.getLogger("wcrp_bot.db")
 
 _pool: asyncpg.Pool | None = None
 _db: "Database | None" = None

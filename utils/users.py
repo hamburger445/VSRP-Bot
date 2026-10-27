@@ -6,7 +6,7 @@ import discord
 from utils.core import load_config
 from utils.database import Database, get_db
 
-log = logging.getLogger("vsrp_bot.users")
+log = logging.getLogger("wcrp_bot.users")
 
 
 def _now() -> datetime:

@@ -40,7 +40,7 @@ repo = os.environ.get("GITHUB_REPO", "hamburger445/VSRP-Bot")
 branch = os.environ.get("GITHUB_BRANCH", "main")
 token = os.environ.get("GITHUB_TOKEN", "")
 url = f"https://api.github.com/repos/{repo}/commits/{branch}"
-headers = {"Accept": "application/vnd.github+json", "User-Agent": "vsrp-panel-start"}
+headers = {"Accept": "application/vnd.github+json", "User-Agent": "wcrp-panel-start"}
 if token:
     headers["Authorization"] = f"Bearer {token}"
 req = urllib.request.Request(url, headers=headers)

@@ -10,7 +10,7 @@ from typing import Literal
 
 import discord
 
-log = logging.getLogger("vsrp_bot.wpd_setup")
+log = logging.getLogger("wcrp_bot.wpd_setup")
 
 ChannelKind = Literal["text", "voice"]
 

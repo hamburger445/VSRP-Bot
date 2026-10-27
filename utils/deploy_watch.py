@@ -11,7 +11,7 @@ import aiohttp
 
 from utils.core import ROOT, get_github_repo, get_github_token
 
-log = logging.getLogger("vsrp_bot.deploy")
+log = logging.getLogger("wcrp_bot.deploy")
 
 DEPLOY_SHA_FILE = ROOT / ".deploy-sha"
 RESTART_CODE = int(os.getenv("DEPLOY_EXIT_CODE", "42"))
@@ -59,7 +59,7 @@ async def fetch_head_sha() -> str | None:
     headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "vsrp-bot-deploy-watch",
+        "User-Agent": "wcrp-bot-deploy-watch",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"

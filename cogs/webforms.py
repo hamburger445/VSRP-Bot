@@ -11,7 +11,7 @@ from utils.form_store import get_review, set_review_status
 from utils.form_urls import public_form_base
 from utils.permissions import is_leo, is_staff
 
-log = logging.getLogger("vsrp_bot.webforms")
+log = logging.getLogger("wcrp_bot.webforms")
 
 
 class WebForms(commands.Cog):
@@ -33,7 +33,7 @@ class WebForms(commands.Cog):
         cid = ""
         if interaction.data:
             cid = str(interaction.data.get("custom_id") or "")
-        if not cid.startswith("vsrpdoc:"):
+        if not (cid.startswith("wcrpdoc:") or cid.startswith("vsrpdoc:")):
             return
         parts = cid.split(":")
         if len(parts) != 3:

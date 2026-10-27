@@ -12,7 +12,7 @@ from utils.core import get_github_token
 from utils.github_sql import dump_state, load_state, run
 from utils.github_store import github_get_json, github_put_json
 
-log = logging.getLogger("vsrp_bot.github_db")
+log = logging.getLogger("wcrp_bot.github_db")
 
 _lock = asyncio.Lock()
 _state: dict[str, Any] | None = None

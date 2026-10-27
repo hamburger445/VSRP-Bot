@@ -17,7 +17,7 @@ from utils.helpers import officer_agency_name
 from utils.leo_forms import CITATION_AGENCIES
 from utils.leo_submit import submit_citation, submit_serve_warrant, submit_warrant
 
-log = logging.getLogger("vsrp_bot.forms")
+log = logging.getLogger("wcrp_bot.forms")
 FORMS = ROOT / "webforms"
 _used_jti: set[str] = set()
 _bot = None

@@ -17,7 +17,7 @@ from utils.core import (
 )
 from utils.database import get_db
 
-log = logging.getLogger("vsrp_bot.soft_ban")
+log = logging.getLogger("wcrp_bot.soft_ban")
 
 DEFAULT_BANNED_ROLE_ID = 1553820949357535363
 DEFAULT_BANNED_CHANNEL_ID = 1250622854110773291

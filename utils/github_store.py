@@ -11,7 +11,7 @@ import aiohttp
 
 from utils.core import get_github_repo, get_github_token
 
-log = logging.getLogger("vsrp_bot.github")
+log = logging.getLogger("wcrp_bot.github")
 _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=45, connect=15)
 _known_branches: set[str] = set()
 _file_sha: dict[tuple[str, str], str] = {}

@@ -6,7 +6,7 @@ import discord
 
 from utils.core import format_datetime
 
-log = logging.getLogger("vsrp_bot.erlc")
+log = logging.getLogger("wcrp_bot.erlc")
 
 ERLC_API_URL = "https://api.erlc.gg/v2/server"
 
