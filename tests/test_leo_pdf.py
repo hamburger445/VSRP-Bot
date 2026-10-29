@@ -1,4 +1,15 @@
-from utils.leo_pdf import served_warrant_pdf_bytes, warrant_pdf_bytes
+from utils.leo_pdf import citation_pdf_bytes, served_warrant_pdf_bytes, warrant_pdf_bytes
+
+
+def test_citation_pdf():
+    data = citation_pdf_bytes(
+        {"agency": "WPD", "charge_description": "Speeding", "va_code": "46.2-862"},
+        case_no="0000",
+        fine=50,
+        subject_label="driver",
+        issuer_label="officer",
+    )
+    assert data.startswith(b"%PDF")
 
 
 def test_warrant_pdf_contains_fields():

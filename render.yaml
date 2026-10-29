@@ -1,4 +1,4 @@
-# Discord bot + citation/warrant editor (not CAD).
+# Discord bot (not CAD). Health check is /health so Render keeps the process alive.
 services:
   - type: web
     name: wcrp-bot
@@ -15,8 +15,6 @@ services:
       - key: DISCORD_TOKEN
         sync: false
       - key: GITHUB_TOKEN
-        sync: false
-      - key: FORM_SECRET
         sync: false
       - key: GITHUB_REPO
         value: hamburger445/VSRP-Bot

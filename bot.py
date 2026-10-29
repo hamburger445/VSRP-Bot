@@ -35,7 +35,6 @@ COGS = [
     "cogs.sessions",
     "cogs.profiles",
     "cogs.leo",
-    "cogs.webforms",
     "cogs.admin",
     "cogs.economy",
     "cogs.blackjack",
@@ -61,7 +60,6 @@ MAIN_ONLY_MODULES = frozenset({
     "cogs.sessions",
     "cogs.profiles",
     "cogs.leo",
-    "cogs.webforms",
     "cogs.admin",
     "cogs.economy",
     "cogs.blackjack",
@@ -105,15 +103,9 @@ class WCRPBot(commands.Bot):
         super().__init__(command_prefix=prefix, intents=intents)
 
     async def setup_hook(self):
-        import os
+        from utils.health import start_health_server
 
-        from utils.form_urls import on_render
-
-        bind_local = os.getenv("FORM_BIND_LOCAL", "").strip().lower() in {"1", "true", "yes", "on"}
-        if on_render() or bind_local:
-            from forms_app import start_attached_server
-
-            await start_attached_server()
+        await start_health_server()
         await get_db()
 
         @self.tree.error

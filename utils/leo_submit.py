@@ -1,4 +1,4 @@
-"""Save citations/warrants and post them to Discord (used by slash commands and the web forms)."""
+"""Save citations/warrants and post them to Discord."""
 
 from __future__ import annotations
 

@@ -12,59 +12,10 @@ from utils.database import DatabaseError, DatabaseTimeoutError, get_db
 from utils.helpers import department_display_name, log_action, notify_warrant_cleared
 from utils.leo_case import format_case_number
 from utils.leo_forms import ticket_status_emoji, warrant_status_emoji
-from utils.form_tokens import sign_form_token
-from utils.form_urls import form_page_url
+from utils.form_store import get_review, set_review_status
 from utils.leo_pdf import pdf_file
 from utils.leo_submit import submit_citation, submit_serve_warrant, submit_warrant
-from utils.permissions import is_leo
-
-
-def _paper_form_url(kind: str, interaction: discord.Interaction, member: discord.Member) -> str | None:
-    if not interaction.guild_id:
-        return None
-    token = sign_form_token(
-        kind=kind,
-        guild_id=interaction.guild_id,
-        officer_id=interaction.user.id,
-        subject_id=member.id,
-    )
-    return form_page_url(kind, token)
-
-
-class PaperFormView(discord.ui.View):
-    def __init__(self, url: str, *, cog: "LawEnforcement", member: discord.Member, kind: str, rows=None):
-        super().__init__(timeout=600)
-        self.cog = cog
-        self.member = member
-        self.kind = kind
-        self.rows = rows
-        self.add_item(discord.ui.Button(style=discord.ButtonStyle.link, label="Open document editor", url=url))
-
-    @discord.ui.button(label="Fill out in Discord", style=discord.ButtonStyle.primary)
-    async def fill_discord(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.kind == "citation":
-            view = CitationOptionsView(self.cog, self.member)
-            await interaction.response.send_message(
-                f"**Virginia Uniform Summons** for {self.member.mention}",
-                view=view,
-                ephemeral=True,
-            )
-            return
-        if self.kind == "warrant":
-            view = WarrantOptionsView(self.cog, self.member)
-            view._author_id = interaction.user.id
-            await interaction.response.send_message(
-                f"**Warrant form** for {self.member.mention}",
-                view=view,
-                ephemeral=True,
-            )
-            return
-        view = ServeWarrantView(self.cog, self.rows or [])
-        await interaction.response.send_message(
-            f"Select a warrant to mark **served** for {self.member.mention}:",
-            view=view,
-            ephemeral=True,
-        )
+from utils.permissions import is_leo, is_staff
 
 
 def _dept_roles(guild: discord.Guild, department: str) -> list[discord.Role]:
@@ -121,6 +72,46 @@ class LeoPanelView(discord.ui.View):
 class LawEnforcement(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        if interaction.type != discord.InteractionType.component:
+            return
+        cid = ""
+        if interaction.data:
+            cid = str(interaction.data.get("custom_id") or "")
+        if not (cid.startswith("wcrpdoc:") or cid.startswith("vsrpdoc:")):
+            return
+        parts = cid.split(":")
+        if len(parts) != 3:
+            return
+        _, action, raw_id = parts
+        if not is_leo(interaction.user) and not is_staff(interaction.user):
+            await interaction.response.send_message("Only law enforcement or staff can review documents.", ephemeral=True)
+            return
+        try:
+            review_id = int(raw_id)
+        except ValueError:
+            return
+        row = await get_review(review_id)
+        if not row:
+            await interaction.response.send_message("That submission was not found.", ephemeral=True)
+            return
+        if row.get("status") != "pending":
+            await interaction.response.send_message(f"Already {row.get('status')}.", ephemeral=True)
+            return
+        status = "approved" if action == "approve" else "rejected"
+        updated = await set_review_status(review_id, status, interaction.user.id)
+        if not updated or updated.get("status") != status:
+            await interaction.response.send_message("Could not update this review.", ephemeral=True)
+            return
+        color = 0x27AE60 if status == "approved" else 0x992D22
+        embed = discord.Embed(
+            title=f"Document {status}",
+            description=f"Case **#{row.get('case_number')}** ({row.get('kind')}) was **{status}** by {interaction.user.mention}.",
+            color=color,
+        )
+        await interaction.response.send_message(embed=embed)
 
     async def _finalize_citation(
         self,
@@ -210,48 +201,12 @@ class LawEnforcement(commands.Cog):
             return
         if not await defer(interaction, ephemeral=True):
             return
-        url = _paper_form_url("citation", interaction, member)
-        if url:
-            await reply(
-                interaction,
-                f"**Virginia Uniform Summons** for {member.mention}\n"
-                "Open the **document editor** (HTTPS). Left: form. Right: live paper preview.\n"
-                f"{url}",
-                view=PaperFormView(url, cog=self, member=member, kind="citation"),
-                ephemeral=True,
-            )
-            return
         view = CitationOptionsView(self, member)
         await reply(
             interaction,
             f"**Virginia Uniform Summons** for {member.mention}\n"
-            "Set PUBLIC_FORM_URL to the Render HTTPS URL (not an IP). Filling in Discord for now.",
+            "Fill this out in Discord. It goes on their record when you submit.",
             view=view,
-            ephemeral=True,
-        )
-
-    @app_commands.command(name="leo-form", description="Open the document editor (citation, warrant, or served warrant)")
-    @app_commands.describe(member="Person the document is about")
-    async def leo_form(self, interaction: discord.Interaction, member: discord.Member):
-        if not is_leo(interaction.user):
-            await reply(interaction, "Law enforcement or staff only.", ephemeral=True)
-            return
-        if not await defer(interaction, ephemeral=True):
-            return
-        url = _paper_form_url("editor", interaction, member)
-        if url:
-            await reply(
-                interaction,
-                f"**Document editor** for {member.mention}\n"
-                "Pick citation, warrant, or served warrant on the site. Preview updates live.\n"
-                f"{url}",
-                view=PaperFormView(url, cog=self, member=member, kind="citation"),
-                ephemeral=True,
-            )
-            return
-        await reply(
-            interaction,
-            "Set PUBLIC_FORM_URL to your Render HTTPS URL (example: https://wcrp-bot.onrender.com).",
             ephemeral=True,
         )
 
@@ -263,23 +218,12 @@ class LawEnforcement(commands.Cog):
             return
         if not await defer(interaction, ephemeral=True):
             return
-        url = _paper_form_url("warrant", interaction, member)
-        if url:
-            await reply(
-                interaction,
-                f"**Warrant** for {member.mention}\n"
-                "Open the **document editor** (HTTPS). Left: form. Right: live paper preview.\n"
-                f"{url}",
-                view=PaperFormView(url, cog=self, member=member, kind="warrant"),
-                ephemeral=True,
-            )
-            return
         view = WarrantOptionsView(self, member)
         view._author_id = interaction.user.id
         await reply(
             interaction,
             f"**Warrant form** for {member.mention}\n"
-            "Set PUBLIC_FORM_URL to the Render HTTPS URL (not an IP). Filling in Discord for now.",
+            "Fill this out in Discord. The PDF posts for LEO/staff review.",
             view=view,
             ephemeral=True,
         )
@@ -306,16 +250,6 @@ class LawEnforcement(commands.Cog):
             return
         if not rows:
             await reply(interaction, f"No active warrants for {member.mention}.", ephemeral=True)
-            return
-        url = _paper_form_url("serve", interaction, member)
-        if url:
-            await reply(
-                interaction,
-                f"Record **served warrant** for {member.mention} in the document editor.\n"
-                f"{url}",
-                view=PaperFormView(url, cog=self, member=member, kind="serve", rows=rows),
-                ephemeral=True,
-            )
             return
         view = ServeWarrantView(self, rows)
         await reply(
@@ -456,9 +390,9 @@ class LawEnforcement(commands.Cog):
             title="Law Enforcement Panel",
             description=(
                 "**Commands:**\n"
-                "`/citation` — paper Uniform Summons website (posts PDF to Discord)\n"
-                "`/warrant` — paper warrant website (posts PDF to Discord)\n"
-                "`/serve-warrant` — paper served-warrant website\n"
+                "`/citation` — Uniform Summons in Discord (goes on their record)\n"
+                "`/warrant` — warrant form in Discord (PDF posts for review)\n"
+                "`/serve-warrant` — mark a warrant served in Discord\n"
                 "`/warrant-check` — View warrant history with status\n"
                 "`/removewarrant` — Administratively clear active warrant\n"
                 "`/pager send` — Page a department\n"

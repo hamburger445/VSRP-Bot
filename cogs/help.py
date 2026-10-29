@@ -71,10 +71,9 @@ def _help_sections() -> dict[str, dict]:
             "description": "Police and LEO tools (main server only)",
             "visible": lambda m: is_main_guild(m.guild.id) and is_leo(m),
             "commands": [
-                ("/citation @user", "Opens HTTPS editor; citation goes on their record automatically"),
-                ("/warrant @user", "Opens HTTPS warrant editor; PDF posts to Discord for review"),
-                ("/serve-warrant @user", "Opens served-warrant editor (permanent record)"),
-                ("/leo-form @user", "Document editor with type picker (citation / warrant / served)"),
+                ("/citation @user", "Fill a Uniform Summons in Discord; it goes on their record"),
+                ("/warrant @user", "Fill a warrant in Discord; PDF posts for review"),
+                ("/serve-warrant @user", "Mark a warrant served (permanent record)"),
                 ("/removewarrant warrant_id", "Clear an active warrant"),
                 ("/warrant-check @user", "Warrant history with status"),
                 ("/apply [department]", "Apply_civilian, WPD, WCSO, or WFD"),

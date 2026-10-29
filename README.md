@@ -55,7 +55,7 @@ When `GITHUB_TOKEN` is set, permission changes from `/setup-permissions` and `-r
 
 With `BOT_DATABASE=github` and `GITHUB_TOKEN`, the bot stores records as JSON in the repo (`data/cad/db.json` on the `cad-data` branch by default) so Neon/Postgres is not required. Guild permission mirrors still use `data/guild_permissions/` on the configured GitHub branch.
 
-`/warrant` and `/serve-warrant` attach a filled roleplay PDF in the warrants channel.
+`/citation`, `/warrant`, and `/serve-warrant` are filled in Discord. Citations go on the record immediately; warrants attach a PDF for LEO/staff review.
 
 ## WispByte / panel hosting
 

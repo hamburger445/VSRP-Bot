@@ -1,6 +1,8 @@
-# Host on Render (bot + citation website)
+# Host on Render (Discord bot)
 
-Run **one** Render **Web Service** from this repo. That process is the Discord bot **and** the HTTPS document editor. Do not also run the bot on WispByte or you will have two bots.
+Run **one** Render **Web Service** from this repo. That process is the Discord bot. A tiny `/health` HTTP server keeps Render from killing the dyno. Do not also run the bot on WispByte or you will have two bots.
+
+Citations, warrants, and served warrants are filled **in Discord** (`/citation`, `/warrant`, `/serve-warrant`). There is no document website.
 
 ## Render
 
@@ -14,11 +16,8 @@ Run **one** Render **Web Service** from this repo. That process is the Discord b
 | `DISCORD_TOKEN` | Yes | Bot token |
 | `GITHUB_TOKEN` | Yes | PAT for the JSON database (`cad-data` branch) |
 | `BOT_DATABASE` | No | `github` |
-| `FORM_SECRET` | Recommended | Shared HMAC for form links |
-| `PUBLIC_FORM_URL` | No | Defaults to Render’s `https://YOUR-SERVICE.onrender.com` |
 
-5. After the first deploy, open `https://YOUR-SERVICE.onrender.com/health`. You should see `{"ok": true, "forms": true, ...}`.
-6. `/citation` **Open document editor** uses that HTTPS URL.
+5. After the first deploy, open `https://YOUR-SERVICE.onrender.com/health`. You should see `{"ok": true}`.
 
 If an old CAD service (`old-cad`) is still running, change its start command to `python bot.py` or delete it.
 
@@ -105,23 +104,9 @@ Local `python bot.py` does not auto-reload unless you set `DEPLOY_WATCH=1`.
 - `Authorization: Bearer ${GITHUB_TOKEN}` with an empty variable still sends `Bearer ` and GitHub returns 401.
 - A Discord bot token is not a GitHub PAT. Put a GitHub PAT in `GITHUB_TOKEN` only for the JSON database / private code.
 
-## 6. Document editor (Render HTTPS)
+## 6. Law enforcement forms
 
-The editor is **not** hosted on WispByte. That game port is why the browser sat on an infinite spinner. Deploy `forms_app.py` on Render (`render.yaml` service `wcrp-bot`).
-
-On **both** Render and WispByte set the same:
-
-```
-PUBLIC_FORM_URL=https://wcrp-bot.onrender.com
-FORM_SECRET=a-long-random-string
-DISCORD_TOKEN=...
-GITHUB_TOKEN=...
-BOT_DATABASE=github
-```
-
-Use the real `*.onrender.com` hostname Render shows after the first deploy (https only — not an IP, not localhost).
-
-`/citation` posts the summons to their record immediately (no approve/reject). `/warrant` and `/serve-warrant` still post a PDF for LEO/staff to approve or reject.
+Fill `/citation`, `/warrant`, and `/serve-warrant` in Discord. Citations go on the record immediately. Warrants and served warrants still post a PDF for LEO/staff to approve or reject.
 
 ## Why not `git clone`
 
